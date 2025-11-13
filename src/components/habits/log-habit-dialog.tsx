@@ -196,6 +196,22 @@ export function LogHabitDialog({
 
                 const isRangeMode = frequency !== "daily";
 
+                const calendarSelectionProps = isRangeMode
+                  ? ({
+                      mode: "range" as const,
+                      selected: calendarRange,
+                    } satisfies {
+                      mode: "range";
+                      selected: DateRange | undefined;
+                    })
+                  : ({
+                      mode: "single" as const,
+                      selected: value,
+                    } satisfies {
+                      mode: "single";
+                      selected: Date | undefined;
+                    });
+
                 const periodDescriptor = habitFrequencyLabels[frequency];
 
                 const buttonLabel = value
@@ -246,15 +262,12 @@ export function LogHabitDialog({
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
-                          mode={isRangeMode ? "range" : "single"}
-                          selected={isRangeMode ? calendarRange : value}
+                          {...calendarSelectionProps}
                           defaultMonth={value}
                           weekStartsOn={WEEK_START}
                           onSelect={handleSelect}
                           captionLayout={
-                            frequency === "monthly"
-                              ? "dropdown-buttons"
-                              : "label"
+                            frequency === "monthly" ? "dropdown" : "label"
                           }
                           initialFocus
                         />
