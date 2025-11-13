@@ -1,36 +1,93 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+## Habit Tracker
 
-## Getting Started
+Single-user habit tracking and daily planning app built with the AI-friendly stack:
 
-First, run the development server:
+- Next.js 16 (App Router) + React 19
+- TypeScript + TailwindCSS + shadcn/ui
+- React Query for data fetching
+- MongoDB via Mongoose
+
+### Features
+- Create habits with daily, weekly, or monthly cadence
+- Log progress once per period with rating (`bad`, `okay`, `good`) and notes
+- Visualize recent trend lines and history for each habit
+- Plan the current day and tomorrow with time-blocked events
+- Save favorite events for quick reuse
+- Maintain a single-level categorized backlog and mark items complete
+
+---
+
+## 1. Environment Setup
+
+### Prerequisites
+- Node.js 20.x or later
+- npm 10.x or later
+- MongoDB deployment (Atlas or local)
+
+### Install dependencies
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Environment variables
+Create `/Users/chrischambers/Documents/Websites/Habit Tracker/.env.local`:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+MONGODB_URI=mongodb+srv://<user>:<password>@<cluster>/habit-tracker
+MONGODB_DB_NAME=habit-tracker
+# Optional: defaults to your system time zone
+# APP_TIMEZONE=America/New_York
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**MongoDB quick start**
+1. Create a free [MongoDB Atlas](https://www.mongodb.com/atlas) cluster (or run `mongod` locally).
+2. Add a database user and copy the connection string.
+3. Replace `<user>`/`<password>`/`<cluster>` above.
+4. The app will automatically create collections on first run—no manual migrations needed.
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+## 2. Development Workflow
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Start the dev server
+```bash
+npm run dev
+```
+Visit [http://localhost:3000](http://localhost:3000).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Lint & typecheck
+```bash
+npm run lint
+```
 
-## Deploy on Vercel
+### Run smoke tests
+```bash
+npm test
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 3. Project Structure
+- `src/app/(dashboard)/habits` – habit dashboard UI
+- `src/app/(dashboard)/schedule` – schedule + backlog experience
+- `src/app/api` – REST endpoints for habits, logs, schedule, favorites, backlog
+- `src/lib/models` – Mongoose models
+- `src/lib/schemas` – shared Zod schemas & response parsing
+- `src/hooks` – React Query hooks for data access
+- `src/components` – shadcn-based UI building blocks
+
+---
+
+## 4. Deployment Notes
+- Ready for Vercel; set environment variables in the project dashboard.
+- Add `MONGODB_URI` and `MONGODB_DB_NAME` to the host environment.
+- `npm run build` performs a production compile with React Compiler + Turbopack.
+
+---
+
+## 5. Roadmap Ideas
+- Authentication for multi-user support
+- Push/email reminders based on habit cadence
+- Deeper analytics (streaks, category rollups)
+- Mobile-first PWA enhancements
