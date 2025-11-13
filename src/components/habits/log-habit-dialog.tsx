@@ -30,20 +30,37 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { habitLogCreateSchema, type HabitLogResponse } from "@/lib/schemas/habit-log";
+import {
+  habitLogCreateSchema,
+  type HabitLogResponse,
+} from "@/lib/schemas/habit-log";
 import { useUpsertHabitLog, useUpdateHabitLog } from "@/hooks/use-habits";
-import { format } from "date-fns";
 import {
   habitRatingLabels,
   habitRatingOrder,
   habitRatingStyles,
 } from "@/lib/constants/habit-rating";
+import type { HabitResponse } from "@/lib/schemas/habit";
+import {
+  formatPeriodLabel,
+  getPeriodRange,
+  getPeriodStartUtc,
+  habitFrequencyLabels,
+  normalizePeriodStart,
+  WEEK_START,
+} from "@/lib/habit-period";
+import type { DateRange } from "react-day-picker";
 
 type LogHabitDialogProps = {
   habitId: string;
+  frequency: HabitResponse["frequency"];
   trigger?: React.ReactNode;
   initialLog?: HabitLogResponse;
   onCompleted?: () => void;
@@ -56,6 +73,7 @@ type LogHabitSubmitValues = z.output<typeof createSchema>;
 
 export function LogHabitDialog({
   habitId,
+  frequency,
   trigger,
   initialLog,
   onCompleted,
@@ -68,11 +86,14 @@ export function LogHabitDialog({
   const defaultValues = React.useMemo(
     () =>
       ({
-        periodStart: initialLog ? new Date(initialLog.periodStart) : new Date(),
+        periodStart: normalizePeriodStart(
+          initialLog ? new Date(initialLog.periodStart) : new Date(),
+          frequency
+        ),
         rating: initialLog?.rating ?? "good",
         comment: initialLog?.comment ?? "",
       } satisfies LogHabitFormValues),
-    [initialLog],
+    [initialLog, frequency]
   );
 
   const form = useForm<LogHabitFormValues, unknown, LogHabitSubmitValues>({
@@ -86,13 +107,18 @@ export function LogHabitDialog({
     : undefined;
 
   const onSubmit = async (values: LogHabitSubmitValues) => {
+    const payload: LogHabitSubmitValues = {
+      ...values,
+      periodStart: getPeriodStartUtc(values.periodStart, frequency),
+    };
+
     if (isEditing && initialLog) {
       await updateLog.mutateAsync({
         logId: initialLog.id,
-        input: values,
+        input: payload,
       });
     } else {
-      await upsertLog.mutateAsync(values);
+      await upsertLog.mutateAsync(payload);
     }
     onCompleted?.();
     setOpen(false);
@@ -101,26 +127,27 @@ export function LogHabitDialog({
   React.useEffect(() => {
     if (open && isEditing && initialLog) {
       form.reset({
-        periodStart: new Date(initialLog.periodStart),
+        periodStart: normalizePeriodStart(
+          new Date(initialLog.periodStart),
+          frequency
+        ),
         rating: initialLog.rating,
         comment: initialLog.comment ?? "",
       } satisfies LogHabitFormValues);
     }
-  }, [open, isEditing, initialLog, form]);
+  }, [open, isEditing, initialLog, form, frequency]);
 
   React.useEffect(() => {
     if (!open && !isEditing) {
       form.reset({
-        periodStart: new Date(),
+        periodStart: normalizePeriodStart(new Date(), frequency),
         rating: "good",
         comment: "",
       } satisfies LogHabitFormValues);
     }
-  }, [form, open, isEditing]);
+  }, [form, open, isEditing, frequency]);
 
-  const isSubmitting = isEditing
-    ? updateLog.isPending
-    : upsertLog.isPending;
+  const isSubmitting = isEditing ? updateLog.isPending : upsertLog.isPending;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -147,17 +174,61 @@ export function LogHabitDialog({
               control={form.control}
               name="periodStart"
               render={({ field }) => {
-                const value =
+                const rawValue =
                   field.value instanceof Date
                     ? field.value
                     : typeof field.value === "string" ||
-                        typeof field.value === "number"
-                      ? new Date(field.value)
-                      : undefined;
+                      typeof field.value === "number"
+                    ? new Date(field.value)
+                    : undefined;
+
+                const value = rawValue
+                  ? normalizePeriodStart(rawValue, frequency)
+                  : undefined;
+
+                const periodRange = value
+                  ? getPeriodRange(value, frequency)
+                  : undefined;
+
+                const calendarRange = periodRange
+                  ? { from: periodRange.start, to: periodRange.end }
+                  : undefined;
+
+                const isRangeMode = frequency !== "daily";
+
+                const periodDescriptor = habitFrequencyLabels[frequency];
+
+                const buttonLabel = value
+                  ? formatPeriodLabel(value, frequency)
+                  : `Select ${periodDescriptor}`;
+
+                const handleSelect = (
+                  selection: Date | DateRange | undefined
+                ) => {
+                  if (!selection) return;
+
+                  if (!isRangeMode && selection instanceof Date) {
+                    field.onChange(normalizePeriodStart(selection, frequency));
+                    return;
+                  }
+
+                  if (
+                    isRangeMode &&
+                    selection &&
+                    typeof selection === "object"
+                  ) {
+                    const range = selection as DateRange;
+                    const nextDate = range?.from ?? range?.to;
+                    if (!nextDate) return;
+                    field.onChange(normalizePeriodStart(nextDate, frequency));
+                  }
+                };
 
                 return (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Period Date</FormLabel>
+                    <FormLabel className="capitalize">
+                      {periodDescriptor} to log
+                    </FormLabel>
                     <Popover>
                       <PopoverTrigger asChild>
                         <FormControl>
@@ -165,27 +236,37 @@ export function LogHabitDialog({
                             variant="outline"
                             className={cn(
                               "pl-3 text-left font-normal",
-                              !value && "text-muted-foreground",
+                              !value && "text-muted-foreground"
                             )}
                           >
-                            {value ? (
-                              format(value, "PPP")
-                            ) : (
-                              <span>Select date</span>
-                            )}
+                            {value ? buttonLabel : <span>Select period</span>}
                             <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
                           </Button>
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0" align="start">
                         <Calendar
-                          mode="single"
-                          selected={value}
-                          onSelect={field.onChange}
+                          mode={isRangeMode ? "range" : "single"}
+                          selected={isRangeMode ? calendarRange : value}
+                          defaultMonth={value}
+                          weekStartsOn={WEEK_START}
+                          onSelect={handleSelect}
+                          captionLayout={
+                            frequency === "monthly"
+                              ? "dropdown-buttons"
+                              : "label"
+                          }
                           initialFocus
                         />
                       </PopoverContent>
                     </Popover>
+                    {frequency !== "daily" && (
+                      <p className="text-xs text-muted-foreground">
+                        {frequency === "weekly"
+                          ? "Select any day in the week you want to log. We'll record the full week."
+                          : "Select any day in the month you want to log. We'll record the full month."}
+                      </p>
+                    )}
                     <FormMessage />
                   </FormItem>
                 );
@@ -197,9 +278,7 @@ export function LogHabitDialog({
                 name="rating"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel
-                      className={cn(currentRatingStyles?.text)}
-                    >
+                    <FormLabel className={cn(currentRatingStyles?.text)}>
                       Rating
                     </FormLabel>
                     <Select
@@ -210,7 +289,7 @@ export function LogHabitDialog({
                         <SelectTrigger
                           className={cn(
                             "capitalize",
-                            currentRatingStyles?.softBadge,
+                            currentRatingStyles?.softBadge
                           )}
                         >
                           <SelectValue placeholder="Select rating" />
@@ -223,13 +302,13 @@ export function LogHabitDialog({
                             value={value}
                             className={cn(
                               "flex items-center gap-2 capitalize",
-                              habitRatingStyles[value].text,
+                              habitRatingStyles[value].text
                             )}
                           >
                             <span
                               className={cn(
                                 "h-2 w-2 rounded-full",
-                                habitRatingStyles[value].dot,
+                                habitRatingStyles[value].dot
                               )}
                             />
                             {habitRatingLabels[value]}
@@ -268,8 +347,8 @@ export function LogHabitDialog({
                 {isSubmitting
                   ? "Saving..."
                   : isEditing
-                    ? "Save Changes"
-                    : "Save Log"}
+                  ? "Save Changes"
+                  : "Save Log"}
               </Button>
             </DialogFooter>
           </form>
@@ -278,4 +357,3 @@ export function LogHabitDialog({
     </Dialog>
   );
 }
-

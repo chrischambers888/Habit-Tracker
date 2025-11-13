@@ -3,7 +3,11 @@ import { toast } from "@/hooks/use-toast";
 import { queryKeys } from "@/lib/query-keys";
 import { habitsApi, habitLogsApi } from "@/lib/api-client";
 import type { HabitUpdateInput } from "@/lib/schemas/habit";
-import type { HabitLogInput, HabitLogUpdateInput } from "@/lib/schemas/habit-log";
+import type {
+  HabitLogInput,
+  HabitLogResponse,
+  HabitLogUpdateInput,
+} from "@/lib/schemas/habit-log";
 
 export function useHabits() {
   return useQuery({
@@ -167,3 +171,56 @@ export function useUpdateHabitLog(habitId: string) {
   });
 }
 
+type BulkHabitLogEntry = {
+  habitId: string;
+  input: Omit<HabitLogInput, "habitId">;
+};
+
+type BulkHabitLogResult = {
+  habitId: string;
+  log: HabitLogResponse;
+};
+
+export function useBulkUpsertHabitLogs() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (entries: BulkHabitLogEntry[]) => {
+      if (!entries.length) return [] as BulkHabitLogResult[];
+
+      const results = await Promise.all(
+        entries.map(async ({ habitId, input }) => {
+          const log = await habitLogsApi.upsert(habitId, input);
+          return { habitId, log };
+        })
+      );
+
+      return results;
+    },
+    onSuccess: (results, entries) => {
+      const habitIds = new Set(entries.map((entry) => entry.habitId));
+      habitIds.forEach((habitId) => {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.habitLogs(habitId),
+        });
+      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.habits });
+
+      if (results.length > 0) {
+        toast({
+          title: "Habits logged",
+          description: `Recorded progress for ${results.length} habit${
+            results.length === 1 ? "" : "s"
+          }.`,
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Unable to log habits",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}

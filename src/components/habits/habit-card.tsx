@@ -17,7 +17,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ChartContainer } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { LogHabitDialog } from "@/components/habits/log-habit-dialog";
 import { HabitEditorDialog } from "@/components/habits/habit-editor-dialog";
 import {
@@ -26,7 +26,6 @@ import {
   useDeleteHabitLog,
 } from "@/hooks/use-habits";
 import type { HabitResponse } from "@/lib/schemas/habit";
-import { format } from "date-fns";
 import { toast } from "@/hooks/use-toast";
 import { MoreHorizontal, Pencil, Trash } from "lucide-react";
 import {
@@ -37,13 +36,21 @@ import {
   ResponsiveContainer,
   Tooltip,
   CartesianGrid,
+  ReferenceArea,
+  ReferenceLine,
 } from "recharts";
 import { cn } from "@/lib/utils";
 import {
   habitRatingLabels,
   habitRatingOrder,
   habitRatingStyles,
+  habitRatingColors,
 } from "@/lib/constants/habit-rating";
+import {
+  formatPeriodAxisLabel,
+  formatPeriodLabel,
+  normalizePeriodStart,
+} from "@/lib/habit-period";
 
 const ratingValue = {
   bad: 0,
@@ -51,10 +58,24 @@ const ratingValue = {
   good: 2,
 };
 
+const ratingBackgrounds: {
+  key: keyof typeof habitRatingStyles;
+  y1: number;
+  y2: number;
+}[] = [
+  { key: "bad", y1: -0.25, y2: 0.5 },
+  { key: "okay", y1: 0.5, y2: 1.5 },
+  { key: "good", y1: 1.5, y2: 2.25 },
+];
+
 const chartConfig = {
   rating: {
     label: "Rating",
-    color: "hsl(var(--chart-3))",
+    color: habitRatingColors.good.solid,
+  },
+  average: {
+    label: "Average",
+    color: habitRatingColors.okay.solid,
   },
 };
 
@@ -74,32 +95,63 @@ export function HabitCard({ habit }: HabitCardProps) {
   }));
 
   const hasRatingDescriptions = ratingDescriptionsList.some(
-    (item) => item.text.trim().length > 0,
+    (item) => item.text.trim().length > 0
   );
 
-  const latestLog = logs?.[logs.length - 1];
-  const average =
+  const averageRatingValue =
     logs && logs.length > 0
       ? logs.reduce((sum, log) => sum + ratingValue[log.rating], 0) /
         logs.length
       : null;
+
   const averageRatingKey =
-    average !== null
-      ? habitRatingOrder[Math.round(average) as 0 | 1 | 2] ?? "okay"
+    averageRatingValue != null
+      ? habitRatingOrder[Math.round(averageRatingValue) as 0 | 1 | 2] ?? "okay"
       : null;
 
   const chartData =
-    logs?.map((log) => ({
-      date: format(log.periodStart, "MMM d"),
-      rating: ratingValue[log.rating],
-      ratingKey: log.rating,
-      label: habitRatingLabels[log.rating],
-      comment: log.comment,
-    })) ?? [];
+    logs?.map((log) => {
+      const periodStart = normalizePeriodStart(
+        log.periodStart,
+        habit.frequency
+      );
+
+      return {
+        id: log.id,
+        axisLabel: formatPeriodAxisLabel(periodStart, habit.frequency),
+        periodLabel: formatPeriodLabel(periodStart, habit.frequency),
+        rating: ratingValue[log.rating],
+        ratingKey: log.rating,
+        ratingLabel: habitRatingLabels[log.rating],
+        comment: log.comment,
+      };
+    }) ?? [];
+
+  const gradientId = React.useId();
+
+  const gradientStops = React.useMemo(() => {
+    if (!chartData.length) {
+      return [];
+    }
+
+    if (chartData.length === 1) {
+      const color = habitRatingColors[chartData[0].ratingKey].solid;
+      return [
+        { offset: "0%", color },
+        { offset: "100%", color },
+      ];
+    }
+
+    const lastIndex = chartData.length - 1;
+    return chartData.map((entry, index) => ({
+      offset: `${(index / lastIndex) * 100}%`,
+      color: habitRatingColors[entry.ratingKey].solid,
+    }));
+  }, [chartData]);
 
   const handleDelete = async () => {
     const confirmed = window.confirm(
-      `Delete habit "${habit.name}"? This cannot be undone.`,
+      `Delete habit "${habit.name}"? This cannot be undone.`
     );
     if (!confirmed) return;
 
@@ -133,7 +185,9 @@ export function HabitCard({ habit }: HabitCardProps) {
       <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <CardTitle className="text-lg font-semibold">{habit.name}</CardTitle>
+            <CardTitle className="text-lg font-semibold">
+              {habit.name}
+            </CardTitle>
             <HabitEditorDialog
               habit={habit}
               trigger={
@@ -153,13 +207,13 @@ export function HabitCard({ habit }: HabitCardProps) {
                 <span
                   className={cn(
                     "flex min-w-[5rem] items-center gap-1 font-medium",
-                    habitRatingStyles[item.key].text,
+                    habitRatingStyles[item.key].text
                   )}
                 >
                   <span
                     className={cn(
                       "h-2.5 w-2.5 rounded-full",
-                      habitRatingStyles[item.key].dot,
+                      habitRatingStyles[item.key].dot
                     )}
                   />
                   {item.label}:
@@ -206,47 +260,23 @@ export function HabitCard({ habit }: HabitCardProps) {
           <Badge variant="secondary" className="capitalize">
             {habit.frequency}
           </Badge>
-          {average !== null ? (
-            <span className="flex items-center gap-2">
-              Average: {average.toFixed(1)} / 2
-              {averageRatingKey && (
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium capitalize",
-                    habitRatingStyles[averageRatingKey].softBadge,
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "h-2 w-2 rounded-full",
-                      habitRatingStyles[averageRatingKey].dot,
-                    )}
-                  />
-                  {habitRatingLabels[averageRatingKey]}
-                </span>
+          {averageRatingKey ? (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium capitalize",
+                habitRatingStyles[averageRatingKey].softBadge
               )}
+            >
+              <span
+                className={cn(
+                  "h-2 w-2 rounded-full",
+                  habitRatingStyles[averageRatingKey].dot
+                )}
+              />
+              {habitRatingLabels[averageRatingKey]}
             </span>
           ) : (
             <span>No logs yet</span>
-          )}
-          {latestLog && (
-            <span>
-              Last logged {format(latestLog.periodStart, "MMM d")}{" "}
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium capitalize",
-                  habitRatingStyles[latestLog.rating].softBadge,
-                )}
-              >
-                <span
-                  className={cn(
-                    "h-2 w-2 rounded-full",
-                    habitRatingStyles[latestLog.rating].dot,
-                  )}
-                />
-                {habitRatingLabels[latestLog.rating]}
-              </span>
-            </span>
           )}
         </div>
         <div className="h-52">
@@ -258,10 +288,40 @@ export function HabitCard({ habit }: HabitCardProps) {
             <ChartContainer className="h-full" config={chartConfig}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="date" stroke="currentColor" />
+                  <defs>
+                    <linearGradient
+                      id={gradientId}
+                      x1="0%"
+                      y1="0%"
+                      x2="100%"
+                      y2="0%"
+                    >
+                      {gradientStops.map((stop, index) => (
+                        <stop
+                          key={`${stop.color}-${index}`}
+                          offset={stop.offset}
+                          stopColor={stop.color}
+                        />
+                      ))}
+                    </linearGradient>
+                  </defs>
+                  {ratingBackgrounds.map((band) => (
+                    <ReferenceArea
+                      key={band.key}
+                      y1={band.y1}
+                      y2={band.y2}
+                      fill={habitRatingColors[band.key].translucent}
+                      strokeOpacity={0}
+                    />
+                  ))}
+                  <CartesianGrid
+                    strokeDasharray="3 3"
+                    className="stroke-muted"
+                  />
+                  <XAxis dataKey="axisLabel" stroke="currentColor" />
                   <YAxis
-                    domain={[0, 2]}
+                    domain={[-0.25, 2.25]}
+                    allowDataOverflow
                     ticks={[0, 1, 2]}
                     stroke="currentColor"
                     tickFormatter={(value: number) => {
@@ -272,18 +332,21 @@ export function HabitCard({ habit }: HabitCardProps) {
                   />
                   <Tooltip
                     cursor={{ strokeDasharray: "3 3" }}
-                    content={({ active, payload, label }) => {
+                    content={({ active, payload }) => {
                       if (!active || !payload?.length) return null;
-                      const data = payload[0].payload as (typeof chartData)[number];
+                      const data = payload[0]
+                        .payload as (typeof chartData)[number];
                       return (
-                        <div className="rounded-md border bg-background p-2 text-xs shadow-md">
-                          <div className="font-semibold">{label}</div>
+                        <ChartTooltip>
+                          <div className="font-semibold">
+                            {data.periodLabel}
+                          </div>
                           <div
                             className={cn(
                               "mt-0.5 flex items-center gap-1 font-medium capitalize",
                               habitRatingStyles[
                                 data.ratingKey as keyof typeof habitRatingStyles
-                              ].text,
+                              ].text
                             )}
                           >
                             <span
@@ -291,26 +354,73 @@ export function HabitCard({ habit }: HabitCardProps) {
                                 "h-2 w-2 rounded-full",
                                 habitRatingStyles[
                                   data.ratingKey as keyof typeof habitRatingStyles
-                                ].dot,
+                                ].dot
                               )}
                             />
-                            {data.label}
+                            {data.ratingLabel}
                           </div>
                           {data.comment ? (
                             <div className="text-muted-foreground">
                               {data.comment}
                             </div>
                           ) : null}
-                        </div>
+                        </ChartTooltip>
                       );
                     }}
                   />
+                  {averageRatingValue != null && averageRatingKey ? (
+                    <ReferenceLine
+                      y={averageRatingValue}
+                      stroke={habitRatingColors[averageRatingKey].solid}
+                      strokeDasharray="4 4"
+                      strokeWidth={2}
+                      label={{
+                        value: `Avg (${habitRatingLabels[averageRatingKey]})`,
+                        position: "right",
+                        fill: habitRatingColors[averageRatingKey].solid,
+                        fontSize: 12,
+                      }}
+                    />
+                  ) : null}
                   <Line
                     type="monotone"
                     dataKey="rating"
-                    stroke="hsl(var(--chart-3))"
+                    stroke={
+                      gradientStops.length
+                        ? `url(#${gradientId})`
+                        : habitRatingColors.good.solid
+                    }
                     strokeWidth={2}
-                    dot
+                    dot={({ cx, cy, payload }) => {
+                      if (cx == null || cy == null) return null;
+                      const point = payload as (typeof chartData)[number];
+                      const color = habitRatingColors[point.ratingKey].solid;
+                      return (
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={5}
+                          fill={color}
+                          stroke="white"
+                          strokeWidth={1.5}
+                        />
+                      );
+                    }}
+                    activeDot={({ cx, cy, payload }) => {
+                      if (cx == null || cy == null) return null;
+                      const point = payload as (typeof chartData)[number];
+                      const color = habitRatingColors[point.ratingKey].solid;
+                      return (
+                        <circle
+                          cx={cx}
+                          cy={cy}
+                          r={7}
+                          fill={color}
+                          stroke="white"
+                          strokeWidth={2}
+                        />
+                      );
+                    }}
                   />
                 </LineChart>
               </ResponsiveContainer>
@@ -322,66 +432,71 @@ export function HabitCard({ habit }: HabitCardProps) {
           )}
         </div>
         <div className="grid gap-2">
-          {logs?.slice(-5).reverse().map((log) => (
-            <div
-              key={log.id}
-              className="flex items-center justify-between rounded-md border p-3"
-            >
-              <div>
-                <p className="text-sm font-medium">
-                  {format(log.periodStart, "MMM d, yyyy")}
-                </p>
-                {log.comment && (
-                  <p className="text-sm text-muted-foreground">{log.comment}</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <Badge
-                  className={cn(
-                    "capitalize",
-                    habitRatingStyles[log.rating].badge,
+          {logs
+            ?.slice(-5)
+            .reverse()
+            .map((log) => (
+              <div
+                key={log.id}
+                className="flex items-center justify-between rounded-md border p-3"
+              >
+                <div>
+                  <p className="text-sm font-medium">
+                    {formatPeriodLabel(log.periodStart, habit.frequency)}
+                  </p>
+                  {log.comment && (
+                    <p className="text-sm text-muted-foreground">
+                      {log.comment}
+                    </p>
                   )}
-                >
-                  {habitRatingLabels[log.rating]}
-                </Badge>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="icon">
-                      <MoreHorizontal className="h-4 w-4" />
-                      <span className="sr-only">Open log actions</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <LogHabitDialog
-                      habitId={habit.id}
-                      initialLog={log}
-                      trigger={
-                        <DropdownMenuItem
-                          onSelect={(event) => event.preventDefault()}
-                        >
-                          <Pencil className="mr-2 h-4 w-4" />
-                          Edit log
-                        </DropdownMenuItem>
-                      }
-                    />
-                    <DropdownMenuItem
-                      className="text-destructive focus:text-destructive"
-                      onClick={() => handleDeleteLog(log.id)}
-                    >
-                      <Trash className="mr-2 h-4 w-4" />
-                      Delete log
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge
+                    className={cn(
+                      "capitalize",
+                      habitRatingStyles[log.rating].badge
+                    )}
+                  >
+                    {habitRatingLabels[log.rating]}
+                  </Badge>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <MoreHorizontal className="h-4 w-4" />
+                        <span className="sr-only">Open log actions</span>
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <LogHabitDialog
+                        habitId={habit.id}
+                        frequency={habit.frequency}
+                        initialLog={log}
+                        trigger={
+                          <DropdownMenuItem
+                            onSelect={(event) => event.preventDefault()}
+                          >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit log
+                          </DropdownMenuItem>
+                        }
+                      />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => handleDeleteLog(log.id)}
+                      >
+                        <Trash className="mr-2 h-4 w-4" />
+                        Delete log
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
         </div>
       </CardContent>
       <CardFooter className="flex justify-end">
-        <LogHabitDialog habitId={habit.id} />
+        <LogHabitDialog habitId={habit.id} frequency={habit.frequency} />
       </CardFooter>
     </Card>
   );
 }
-

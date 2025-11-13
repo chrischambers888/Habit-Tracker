@@ -40,3 +40,24 @@ export const habitRatingStyles: Record<
 
 export const habitRatingOrder: HabitRating[] = ["bad", "okay", "good"];
 
+export const habitRatingColors: Record<
+  HabitRating,
+  {
+    solid: string;
+    translucent: string;
+  }
+> = {
+  bad: {
+    solid: "rgb(244, 63, 94)", // rose-500
+    translucent: "rgba(244, 63, 94, 0.12)",
+  },
+  okay: {
+    solid: "rgb(251, 191, 36)", // amber-400
+    translucent: "rgba(251, 191, 36, 0.12)",
+  },
+  good: {
+    solid: "rgb(16, 185, 129)", // emerald-500
+    translucent: "rgba(16, 185, 129, 0.12)",
+  },
+};
+

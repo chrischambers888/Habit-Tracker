@@ -1,18 +1,12 @@
-import { addDays, startOfDay, startOfMonth, startOfWeek } from "date-fns";
+import { addDays, startOfDay } from "date-fns";
 import type { HabitDocument } from "./models/habit";
+import { getPeriodStartUtc } from "./habit-period";
 
 export function normalizePeriodStart(
   date: Date,
   frequency: HabitDocument["frequency"],
 ) {
-  switch (frequency) {
-    case "daily":
-      return startOfDay(date);
-    case "weekly":
-      return startOfWeek(date, { weekStartsOn: 1 });
-    case "monthly":
-      return startOfMonth(date);
-  }
+  return getPeriodStartUtc(date, frequency);
 }
 
 export function normalizeDay(date: Date | string) {

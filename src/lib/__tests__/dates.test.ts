@@ -20,17 +20,17 @@ describe("dates utilities", () => {
   describe("normalizePeriodStart", () => {
     it("normalizes daily frequency to start of day", () => {
       const normalized = normalizePeriodStart(sampleDate, "daily");
-      expect(normalized.getHours()).toBe(0);
+      expect(normalized.toISOString()).toBe("2025-03-15T00:00:00.000Z");
     });
 
     it("normalizes weekly frequency to Monday start", () => {
       const normalized = normalizePeriodStart(sampleDate, "weekly");
-      expect(normalized.getUTCDay()).toBe(1);
+      expect(normalized.toISOString()).toBe("2025-03-10T00:00:00.000Z");
     });
 
     it("normalizes monthly frequency to first day", () => {
       const normalized = normalizePeriodStart(sampleDate, "monthly");
-      expect(normalized.getUTCDate()).toBe(1);
+      expect(normalized.toISOString()).toBe("2025-03-01T00:00:00.000Z");
     });
   });
 

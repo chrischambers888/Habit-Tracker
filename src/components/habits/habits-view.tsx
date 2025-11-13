@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CreateHabitDialog } from "@/components/habits/create-habit-dialog";
+import { BulkLogHabitsDialog } from "@/components/habits/bulk-log-habits-dialog";
 import { HabitCard } from "@/components/habits/habit-card";
 import { useHabits } from "@/hooks/use-habits";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -40,7 +41,10 @@ export function HabitsView() {
             Track your habits and visualize progress over time.
           </p>
         </div>
-        <CreateHabitDialog />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <BulkLogHabitsDialog />
+          <CreateHabitDialog />
+        </div>
       </div>
 
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -55,9 +59,7 @@ export function HabitsView() {
         </div>
         <Tabs
           value={tab}
-          onValueChange={(value) =>
-            setTab(value as typeof tab)
-          }
+          onValueChange={(value) => setTab(value as typeof tab)}
           className="w-full md:w-auto"
         >
           <TabsList className="grid w-full grid-cols-4 md:w-auto md:grid-cols-4">
@@ -97,4 +99,3 @@ export function HabitsView() {
     </div>
   );
 }
-
