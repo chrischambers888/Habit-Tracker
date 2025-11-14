@@ -20,6 +20,7 @@ import {
 import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { LogHabitDialog } from "@/components/habits/log-habit-dialog";
 import { HabitEditorDialog } from "@/components/habits/habit-editor-dialog";
+import { HabitDetailModal } from "@/components/habits/habit-detail-modal";
 import {
   useHabitLogs,
   useDeleteHabit,
@@ -87,6 +88,7 @@ export function HabitCard({ habit }: HabitCardProps) {
   const deleteHabit = useDeleteHabit();
   const { data: logs, isLoading } = useHabitLogs(habit.id);
   const deleteHabitLog = useDeleteHabitLog(habit.id);
+  const [detailModalOpen, setDetailModalOpen] = React.useState(false);
 
   const ratingDescriptionsList = habitRatingOrder.map((key) => ({
     key,
@@ -181,322 +183,339 @@ export function HabitCard({ habit }: HabitCardProps) {
   };
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <CardTitle className="text-lg font-semibold">
-              {habit.name}
-            </CardTitle>
-            <HabitEditorDialog
-              habit={habit}
-              trigger={
-                <Button variant="ghost" size="icon">
-                  <Pencil className="h-4 w-4" />
-                  <span className="sr-only">Edit habit</span>
-                </Button>
-              }
-            />
-          </div>
-          <div className="space-y-1 text-sm text-muted-foreground">
-            {ratingDescriptionsList.map((item) => (
-              <p
-                key={item.key}
-                className="flex items-start gap-2 whitespace-pre-line text-sm"
-              >
-                <span
-                  className={cn(
-                    "flex min-w-[5rem] items-center gap-1 font-medium",
-                    habitRatingStyles[item.key].text
-                  )}
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-lg font-semibold">
+                {habit.name}
+              </CardTitle>
+              <HabitEditorDialog
+                habit={habit}
+                trigger={
+                  <Button variant="ghost" size="icon">
+                    <Pencil className="h-4 w-4" />
+                    <span className="sr-only">Edit habit</span>
+                  </Button>
+                }
+              />
+            </div>
+            <div className="space-y-1 text-sm text-muted-foreground">
+              {ratingDescriptionsList.map((item) => (
+                <p
+                  key={item.key}
+                  className="flex items-start gap-2 whitespace-pre-line text-sm"
                 >
                   <span
                     className={cn(
-                      "h-2.5 w-2.5 rounded-full",
-                      habitRatingStyles[item.key].dot
-                    )}
-                  />
-                  {item.label}:
-                </span>
-                <span className="flex-1 text-muted-foreground">
-                  {item.text.trim().length > 0 ? item.text : "—"}
-                </span>
-              </p>
-            ))}
-          </div>
-          {habit.description ? (
-            <CardDescription>{habit.description}</CardDescription>
-          ) : hasRatingDescriptions ? null : (
-            <CardDescription className="capitalize">
-              {habit.frequency} habit
-            </CardDescription>
-          )}
-          {!hasRatingDescriptions && (
-            <p className="text-xs text-muted-foreground">
-              Add guidance for each rating so you know what Good/Okay/Bad means.
-            </p>
-          )}
-        </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <MoreHorizontal className="h-4 w-4" />
-              <span className="sr-only">Open menu</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={handleDelete}
-            >
-              <Trash className="mr-2 h-4 w-4" />
-              Delete habit
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-          <Badge variant="secondary" className="capitalize">
-            {habit.frequency}
-          </Badge>
-          {averageRatingKey ? (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium capitalize",
-                habitRatingStyles[averageRatingKey].softBadge
-              )}
-            >
-              <span
-                className={cn(
-                  "h-2 w-2 rounded-full",
-                  habitRatingStyles[averageRatingKey].dot
-                )}
-              />
-              {habitRatingLabels[averageRatingKey]}
-            </span>
-          ) : (
-            <span>No logs yet</span>
-          )}
-        </div>
-        <div className="h-52">
-          {isLoading ? (
-            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-              Loading chart...
-            </div>
-          ) : logs && logs.length > 0 ? (
-            <ChartContainer className="h-full" config={chartConfig}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData}>
-                  <defs>
-                    <linearGradient
-                      id={gradientId}
-                      x1="0%"
-                      y1="0%"
-                      x2="100%"
-                      y2="0%"
-                    >
-                      {gradientStops.map((stop, index) => (
-                        <stop
-                          key={`${stop.color}-${index}`}
-                          offset={stop.offset}
-                          stopColor={stop.color}
-                        />
-                      ))}
-                    </linearGradient>
-                  </defs>
-                  {ratingBackgrounds.map((band) => (
-                    <ReferenceArea
-                      key={band.key}
-                      y1={band.y1}
-                      y2={band.y2}
-                      fill={habitRatingColors[band.key].translucent}
-                      strokeOpacity={0}
-                    />
-                  ))}
-                  <CartesianGrid
-                    strokeDasharray="3 3"
-                    className="stroke-muted"
-                  />
-                  <XAxis dataKey="axisLabel" stroke="currentColor" />
-                  <YAxis
-                    domain={[-0.25, 2.25]}
-                    allowDataOverflow
-                    ticks={[0, 1, 2]}
-                    stroke="currentColor"
-                    tickFormatter={(value: number) => {
-                      const key =
-                        habitRatingOrder[value as 0 | 1 | 2] ?? "okay";
-                      return habitRatingLabels[key];
-                    }}
-                  />
-                  <Tooltip
-                    cursor={{ strokeDasharray: "3 3" }}
-                    content={({ active, payload }) => {
-                      if (!active || !payload?.length) return null;
-                      const data = payload[0]
-                        .payload as (typeof chartData)[number];
-                      return (
-                        <ChartTooltip>
-                          <div className="font-semibold">
-                            {data.periodLabel}
-                          </div>
-                          <div
-                            className={cn(
-                              "mt-0.5 flex items-center gap-1 font-medium capitalize",
-                              habitRatingStyles[
-                                data.ratingKey as keyof typeof habitRatingStyles
-                              ].text
-                            )}
-                          >
-                            <span
-                              className={cn(
-                                "h-2 w-2 rounded-full",
-                                habitRatingStyles[
-                                  data.ratingKey as keyof typeof habitRatingStyles
-                                ].dot
-                              )}
-                            />
-                            {data.ratingLabel}
-                          </div>
-                          {data.comment ? (
-                            <div className="text-muted-foreground">
-                              {data.comment}
-                            </div>
-                          ) : null}
-                        </ChartTooltip>
-                      );
-                    }}
-                  />
-                  {averageRatingValue != null && averageRatingKey ? (
-                    <ReferenceLine
-                      y={averageRatingValue}
-                      stroke={habitRatingColors[averageRatingKey].solid}
-                      strokeDasharray="4 4"
-                      strokeWidth={2}
-                      label={{
-                        value: `Avg (${habitRatingLabels[averageRatingKey]})`,
-                        position: "right",
-                        fill: habitRatingColors[averageRatingKey].solid,
-                        fontSize: 12,
-                      }}
-                    />
-                  ) : null}
-                  <Line
-                    type="monotone"
-                    dataKey="rating"
-                    stroke={
-                      gradientStops.length
-                        ? `url(#${gradientId})`
-                        : habitRatingColors.good.solid
-                    }
-                    strokeWidth={2}
-                    dot={({ cx, cy, payload }) => {
-                      if (cx == null || cy == null) return null;
-                      const point = payload as (typeof chartData)[number];
-                      const color = habitRatingColors[point.ratingKey].solid;
-                      return (
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={5}
-                          fill={color}
-                          stroke="white"
-                          strokeWidth={1.5}
-                        />
-                      );
-                    }}
-                    activeDot={({ cx, cy, payload }) => {
-                      if (cx == null || cy == null) return null;
-                      const point = payload as (typeof chartData)[number];
-                      const color = habitRatingColors[point.ratingKey].solid;
-                      return (
-                        <circle
-                          cx={cx}
-                          cy={cy}
-                          r={7}
-                          fill={color}
-                          stroke="white"
-                          strokeWidth={2}
-                        />
-                      );
-                    }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </ChartContainer>
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
-              <p>No logs yet. Log your first entry to see trends.</p>
-            </div>
-          )}
-        </div>
-        <div className="grid gap-2">
-          {logs
-            ?.slice(-5)
-            .reverse()
-            .map((log) => (
-              <div
-                key={log.id}
-                className="flex items-center justify-between rounded-md border p-3"
-              >
-                <div>
-                  <p className="text-sm font-medium">
-                    {formatPeriodLabel(log.periodStart, habit.frequency)}
-                  </p>
-                  {log.comment && (
-                    <p className="text-sm text-muted-foreground">
-                      {log.comment}
-                    </p>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    className={cn(
-                      "capitalize",
-                      habitRatingStyles[log.rating].badge
+                      "flex min-w-[5rem] items-center gap-1 font-medium",
+                      habitRatingStyles[item.key].text
                     )}
                   >
-                    {habitRatingLabels[log.rating]}
-                  </Badge>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreHorizontal className="h-4 w-4" />
-                        <span className="sr-only">Open log actions</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <LogHabitDialog
-                        habitId={habit.id}
-                        frequency={habit.frequency}
-                        initialLog={log}
-                        trigger={
-                          <DropdownMenuItem
-                            onSelect={(event) => event.preventDefault()}
-                          >
-                            <Pencil className="mr-2 h-4 w-4" />
-                            Edit log
-                          </DropdownMenuItem>
-                        }
-                      />
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onClick={() => handleDeleteLog(log.id)}
-                      >
-                        <Trash className="mr-2 h-4 w-4" />
-                        Delete log
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                    <span
+                      className={cn(
+                        "h-2.5 w-2.5 rounded-full",
+                        habitRatingStyles[item.key].dot
+                      )}
+                    />
+                    {item.label}:
+                  </span>
+                  <span className="flex-1 text-muted-foreground">
+                    {item.text.trim().length > 0 ? item.text : "—"}
+                  </span>
+                </p>
+              ))}
+            </div>
+            {habit.description ? (
+              <CardDescription>{habit.description}</CardDescription>
+            ) : hasRatingDescriptions ? null : (
+              <CardDescription className="capitalize">
+                {habit.frequency} habit
+              </CardDescription>
+            )}
+            {!hasRatingDescriptions && (
+              <p className="text-xs text-muted-foreground">
+                Add guidance for each rating so you know what Good/Okay/Bad
+                means.
+              </p>
+            )}
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="sr-only">Open menu</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={handleDelete}
+              >
+                <Trash className="mr-2 h-4 w-4" />
+                Delete habit
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <Badge variant="secondary" className="capitalize">
+              {habit.frequency}
+            </Badge>
+            {averageRatingKey ? (
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium capitalize",
+                  habitRatingStyles[averageRatingKey].softBadge
+                )}
+              >
+                <span
+                  className={cn(
+                    "h-2 w-2 rounded-full",
+                    habitRatingStyles[averageRatingKey].dot
+                  )}
+                />
+                {habitRatingLabels[averageRatingKey]}
+              </span>
+            ) : (
+              <span>No logs yet</span>
+            )}
+          </div>
+          <div className="h-52">
+            {isLoading ? (
+              <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                Loading chart...
               </div>
-            ))}
-        </div>
-      </CardContent>
-      <CardFooter className="flex justify-end">
-        <LogHabitDialog habitId={habit.id} frequency={habit.frequency} />
-      </CardFooter>
-    </Card>
+            ) : logs && logs.length > 0 ? (
+              <ChartContainer className="h-full" config={chartConfig}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={chartData}>
+                    <defs>
+                      <linearGradient
+                        id={gradientId}
+                        x1="0%"
+                        y1="0%"
+                        x2="100%"
+                        y2="0%"
+                      >
+                        {gradientStops.map((stop, index) => (
+                          <stop
+                            key={`${stop.color}-${index}`}
+                            offset={stop.offset}
+                            stopColor={stop.color}
+                          />
+                        ))}
+                      </linearGradient>
+                    </defs>
+                    {ratingBackgrounds.map((band) => (
+                      <ReferenceArea
+                        key={band.key}
+                        y1={band.y1}
+                        y2={band.y2}
+                        fill={habitRatingColors[band.key].translucent}
+                        strokeOpacity={0}
+                      />
+                    ))}
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-muted"
+                    />
+                    <XAxis dataKey="axisLabel" stroke="currentColor" />
+                    <YAxis
+                      domain={[-0.25, 2.25]}
+                      allowDataOverflow
+                      ticks={[0, 1, 2]}
+                      stroke="currentColor"
+                      tickFormatter={(value: number) => {
+                        const key =
+                          habitRatingOrder[value as 0 | 1 | 2] ?? "okay";
+                        return habitRatingLabels[key];
+                      }}
+                    />
+                    <Tooltip
+                      cursor={{ strokeDasharray: "3 3" }}
+                      content={({ active, payload }) => {
+                        if (!active || !payload?.length) return null;
+                        const data = payload[0]
+                          .payload as (typeof chartData)[number];
+                        return (
+                          <ChartTooltip>
+                            <div className="font-semibold">
+                              {data.periodLabel}
+                            </div>
+                            <div
+                              className={cn(
+                                "mt-0.5 flex items-center gap-1 font-medium capitalize",
+                                habitRatingStyles[
+                                  data.ratingKey as keyof typeof habitRatingStyles
+                                ].text
+                              )}
+                            >
+                              <span
+                                className={cn(
+                                  "h-2 w-2 rounded-full",
+                                  habitRatingStyles[
+                                    data.ratingKey as keyof typeof habitRatingStyles
+                                  ].dot
+                                )}
+                              />
+                              {data.ratingLabel}
+                            </div>
+                            {data.comment ? (
+                              <div className="text-muted-foreground">
+                                {data.comment}
+                              </div>
+                            ) : null}
+                          </ChartTooltip>
+                        );
+                      }}
+                    />
+                    {averageRatingValue != null && averageRatingKey ? (
+                      <ReferenceLine
+                        y={averageRatingValue}
+                        stroke={habitRatingColors[averageRatingKey].solid}
+                        strokeDasharray="4 4"
+                        strokeWidth={2}
+                        label={{
+                          value: `Avg (${habitRatingLabels[averageRatingKey]})`,
+                          position: "right",
+                          fill: habitRatingColors[averageRatingKey].solid,
+                          fontSize: 12,
+                        }}
+                      />
+                    ) : null}
+                    <Line
+                      type="monotone"
+                      dataKey="rating"
+                      stroke={
+                        gradientStops.length
+                          ? `url(#${gradientId})`
+                          : habitRatingColors.good.solid
+                      }
+                      strokeWidth={2}
+                      dot={({ cx, cy, payload }) => {
+                        if (cx == null || cy == null) return null;
+                        const point = payload as (typeof chartData)[number];
+                        const color = habitRatingColors[point.ratingKey].solid;
+                        return (
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r={5}
+                            fill={color}
+                            stroke="white"
+                            strokeWidth={1.5}
+                          />
+                        );
+                      }}
+                      activeDot={({ cx, cy, payload }) => {
+                        if (cx == null || cy == null) return null;
+                        const point = payload as (typeof chartData)[number];
+                        const color = habitRatingColors[point.ratingKey].solid;
+                        return (
+                          <circle
+                            cx={cx}
+                            cy={cy}
+                            r={7}
+                            fill={color}
+                            stroke="white"
+                            strokeWidth={2}
+                          />
+                        );
+                      }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+                <p>No logs yet. Log your first entry to see trends.</p>
+              </div>
+            )}
+          </div>
+          <div className="grid gap-2">
+            {logs
+              ?.slice(-3)
+              .reverse()
+              .map((log) => (
+                <div
+                  key={log.id}
+                  className="flex items-center justify-between rounded-md border p-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium">
+                      {formatPeriodLabel(log.periodStart, habit.frequency)}
+                    </p>
+                    {log.comment && (
+                      <p className="text-sm text-muted-foreground">
+                        {log.comment}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      className={cn(
+                        "capitalize",
+                        habitRatingStyles[log.rating].badge
+                      )}
+                    >
+                      {habitRatingLabels[log.rating]}
+                    </Badge>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon">
+                          <MoreHorizontal className="h-4 w-4" />
+                          <span className="sr-only">Open log actions</span>
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <LogHabitDialog
+                          habitId={habit.id}
+                          frequency={habit.frequency}
+                          initialLog={log}
+                          trigger={
+                            <DropdownMenuItem
+                              onSelect={(event) => event.preventDefault()}
+                            >
+                              <Pencil className="mr-2 h-4 w-4" />
+                              Edit log
+                            </DropdownMenuItem>
+                          }
+                        />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => handleDeleteLog(log.id)}
+                        >
+                          <Trash className="mr-2 h-4 w-4" />
+                          Delete log
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              ))}
+            {logs && logs.length > 3 && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setDetailModalOpen(true)}
+              >
+                See all logs ({logs.length})
+              </Button>
+            )}
+          </div>
+        </CardContent>
+        <CardFooter className="flex justify-end">
+          <LogHabitDialog habitId={habit.id} frequency={habit.frequency} />
+        </CardFooter>
+      </Card>
+      <HabitDetailModal
+        habit={habit}
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+      />
+    </>
   );
 }
