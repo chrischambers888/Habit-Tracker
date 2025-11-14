@@ -212,7 +212,7 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
       .sort((a, b) => a[1].periodStart.getTime() - b[1].periodStart.getTime());
 
     // Filter by date range if specified
-    if (dateRange) {
+    if (dateRange && dateRange.from && dateRange.to) {
       sortedPeriods = sortedPeriods.filter(([_, periodData]) => {
         const periodStart = periodData.periodStart;
         // Compare dates (period start should be within or equal to the range)
