@@ -185,52 +185,52 @@ export function HabitCard({ habit }: HabitCardProps) {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
-          <div className="space-y-1">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-3 md:pb-4">
+          <div className="space-y-1 flex-1 min-w-0">
             <div className="flex items-center gap-2">
-              <CardTitle className="text-lg font-semibold">
+              <CardTitle className="text-base md:text-lg font-semibold truncate">
                 {habit.name}
               </CardTitle>
               <HabitEditorDialog
                 habit={habit}
                 trigger={
-                  <Button variant="ghost" size="icon">
+                  <Button variant="ghost" size="icon" className="shrink-0">
                     <Pencil className="h-4 w-4" />
                     <span className="sr-only">Edit habit</span>
                   </Button>
                 }
               />
             </div>
-            <div className="space-y-1 text-sm text-muted-foreground">
+            <div className="space-y-1 text-xs md:text-sm text-muted-foreground">
               {ratingDescriptionsList.map((item) => (
                 <p
                   key={item.key}
-                  className="flex items-start gap-2 whitespace-pre-line text-sm"
+                  className="flex items-start gap-2 whitespace-pre-line"
                 >
                   <span
                     className={cn(
-                      "flex min-w-[5rem] items-center gap-1 font-medium",
+                      "flex min-w-[4rem] md:min-w-[5rem] items-center gap-1 font-medium shrink-0",
                       habitRatingStyles[item.key].text
                     )}
                   >
                     <span
                       className={cn(
-                        "h-2.5 w-2.5 rounded-full",
+                        "h-2 w-2 md:h-2.5 md:w-2.5 rounded-full shrink-0",
                         habitRatingStyles[item.key].dot
                       )}
                     />
                     {item.label}:
                   </span>
-                  <span className="flex-1 text-muted-foreground">
+                  <span className="flex-1 text-muted-foreground text-xs md:text-sm">
                     {item.text.trim().length > 0 ? item.text : "—"}
                   </span>
                 </p>
               ))}
             </div>
             {habit.description ? (
-              <CardDescription>{habit.description}</CardDescription>
+              <CardDescription className="text-xs md:text-sm">{habit.description}</CardDescription>
             ) : hasRatingDescriptions ? null : (
-              <CardDescription className="capitalize">
+              <CardDescription className="capitalize text-xs md:text-sm">
                 {habit.frequency} habit
               </CardDescription>
             )}
@@ -259,9 +259,9 @@ export function HabitCard({ habit }: HabitCardProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-            <Badge variant="secondary" className="capitalize">
+        <CardContent className="space-y-3 md:space-y-4">
+          <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm text-muted-foreground">
+            <Badge variant="secondary" className="capitalize text-xs">
               {habit.frequency}
             </Badge>
             {averageRatingKey ? (
@@ -280,10 +280,10 @@ export function HabitCard({ habit }: HabitCardProps) {
                 {habitRatingLabels[averageRatingKey]}
               </span>
             ) : (
-              <span>No logs yet</span>
+              <span className="text-xs md:text-sm">No logs yet</span>
             )}
           </div>
-          <div className="h-52">
+          <div className="h-40 md:h-52">
             {isLoading ? (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 Loading chart...
@@ -322,12 +322,17 @@ export function HabitCard({ habit }: HabitCardProps) {
                       strokeDasharray="3 3"
                       className="stroke-muted"
                     />
-                    <XAxis dataKey="axisLabel" stroke="currentColor" />
+                    <XAxis 
+                      dataKey="axisLabel" 
+                      stroke="currentColor"
+                      tick={{ fontSize: 11 }}
+                    />
                     <YAxis
                       domain={[-0.25, 2.25]}
                       allowDataOverflow
                       ticks={[0, 1, 2]}
                       stroke="currentColor"
+                      tick={{ fontSize: 11 }}
                       tickFormatter={(value: number) => {
                         const key =
                           habitRatingOrder[value as 0 | 1 | 2] ?? "okay";
@@ -442,22 +447,22 @@ export function HabitCard({ habit }: HabitCardProps) {
               .map((log) => (
                 <div
                   key={log.id}
-                  className="flex items-center justify-between rounded-md border p-3"
+                  className="flex items-center justify-between rounded-md border p-2 md:p-3 gap-2"
                 >
-                  <div>
-                    <p className="text-sm font-medium">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs md:text-sm font-medium truncate">
                       {formatPeriodLabel(log.periodStart, habit.frequency)}
                     </p>
                     {log.comment && (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-xs md:text-sm text-muted-foreground line-clamp-1">
                         {log.comment}
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     <Badge
                       className={cn(
-                        "capitalize",
+                        "capitalize text-xs",
                         habitRatingStyles[log.rating].badge
                       )}
                     >
@@ -465,7 +470,7 @@ export function HabitCard({ habit }: HabitCardProps) {
                     </Badge>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
                           <MoreHorizontal className="h-4 w-4" />
                           <span className="sr-only">Open log actions</span>
                         </Button>

@@ -635,12 +635,12 @@ export function HabitDetailModal({
                           weekdays: "flex",
                           weekday:
                             "flex-1 text-center text-sm font-medium text-muted-foreground",
-                          week: "mt-2 flex w-full",
+                          week: "mt-2 w-full",
                           day: "relative aspect-square h-full w-full p-0 text-center text-sm",
                         }}
                         components={{
                           Day: (props) => {
-                            const { day } = props;
+                            const { day, ...tdProps } = props;
                             const dateKey = day.date
                               .toISOString()
                               .split("T")[0];
@@ -651,7 +651,7 @@ export function HabitDetailModal({
                                 selectedDate.toISOString().split("T")[0];
 
                             return (
-                              <div className="relative h-full w-full">
+                              <td {...tdProps} className={cn("relative h-full w-full", tdProps.className)}>
                                 <Button
                                   variant="ghost"
                                   className={cn(
@@ -679,7 +679,7 @@ export function HabitDetailModal({
                                     )}
                                   </div>
                                 </Button>
-                              </div>
+                              </td>
                             );
                           },
                         }}

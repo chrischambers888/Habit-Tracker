@@ -45,13 +45,13 @@ export function HabitsView() {
   }, [habits, search]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+    <div className="space-y-4 md:space-y-6">
+      <div className="flex flex-col gap-3 md:gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
+          <h1 className="text-xl md:text-2xl font-semibold tracking-tight">
             Habit Dashboard
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-xs md:text-sm text-muted-foreground">
             Track your habits and visualize progress over time.
           </p>
         </div>
@@ -89,18 +89,18 @@ export function HabitsView() {
             if (habitsInGroup.length === 0) return null;
 
             return (
-              <div key={frequency} className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <h2 className="text-lg font-semibold capitalize">
+              <div key={frequency} className="space-y-3 md:space-y-4">
+                <div className="flex items-center gap-2 md:gap-3">
+                  <h2 className="text-base md:text-lg font-semibold capitalize">
                     {frequency} Habits
                   </h2>
                   <div className="h-px flex-1 bg-border" />
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-xs md:text-sm text-muted-foreground whitespace-nowrap">
                     {habitsInGroup.length}{" "}
                     {habitsInGroup.length === 1 ? "habit" : "habits"}
                   </span>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-3 md:gap-4 md:grid-cols-2">
                   {habitsInGroup.map((habit) => (
                     <HabitCard key={habit.id} habit={habit} />
                   ))}

@@ -80,6 +80,16 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
     to: today,
   });
   const [dateRangePopoverOpen, setDateRangePopoverOpen] = React.useState(false);
+  const [isMobile, setIsMobile] = React.useState(false);
+
+  React.useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Calculate actual date range based on preset
   const dateRange = React.useMemo(() => {
@@ -319,28 +329,28 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
           Overall progress across all your habits
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-4 md:space-y-6">
         {/* Statistics Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-lg border p-4">
-            <div className="text-sm font-medium text-muted-foreground">
+        <div className="grid grid-cols-2 gap-3 md:gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-lg border p-3 md:p-4">
+            <div className="text-xs md:text-sm font-medium text-muted-foreground">
               Total Habits
             </div>
-            <div className="mt-1 text-2xl font-bold">{stats.totalHabits}</div>
+            <div className="mt-1 text-xl md:text-2xl font-bold">{stats.totalHabits}</div>
           </div>
 
-          <div className="rounded-lg border p-4">
-            <div className="text-sm font-medium text-muted-foreground">
+          <div className="rounded-lg border p-3 md:p-4">
+            <div className="text-xs md:text-sm font-medium text-muted-foreground">
               Total Logs
             </div>
-            <div className="mt-1 text-2xl font-bold">{stats.totalLogs}</div>
+            <div className="mt-1 text-xl md:text-2xl font-bold">{stats.totalLogs}</div>
             <div className="mt-1 text-xs text-muted-foreground">
               {stats.habitsWithLogs} of {stats.totalHabits} habits tracked
             </div>
           </div>
 
-          <div className="rounded-lg border p-4">
-            <div className="text-sm font-medium text-muted-foreground">
+          <div className="rounded-lg border p-3 md:p-4">
+            <div className="text-xs md:text-sm font-medium text-muted-foreground">
               Average Rating
             </div>
             {averageRatingKey ? (
@@ -354,7 +364,7 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
                   />
                   <span
                     className={cn(
-                      "text-2xl font-bold capitalize",
+                      "text-xl md:text-2xl font-bold capitalize",
                       habitRatingStyles[averageRatingKey].text
                     )}
                   >
@@ -366,14 +376,14 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
                 </div>
               </>
             ) : (
-              <div className="mt-1 text-2xl font-bold text-muted-foreground">
+              <div className="mt-1 text-xl md:text-2xl font-bold text-muted-foreground">
                 No data
               </div>
             )}
           </div>
 
-          <div className="rounded-lg border p-4">
-            <div className="text-sm font-medium text-muted-foreground">
+          <div className="rounded-lg border p-3 md:p-4">
+            <div className="text-xs md:text-sm font-medium text-muted-foreground">
               Rating Distribution
             </div>
             {totalRatingCount > 0 ? (
@@ -407,7 +417,7 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
                 </div>
               </div>
             ) : (
-              <div className="mt-1 text-sm text-muted-foreground">No logs yet</div>
+              <div className="mt-1 text-xs md:text-sm text-muted-foreground">No logs yet</div>
             )}
           </div>
         </div>
@@ -415,7 +425,7 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
         {/* Combined Chart */}
         {chartData.length > 0 && (
           <div>
-            <div className="mb-4 flex items-center justify-between">
+            <div className="mb-3 md:mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm font-medium">Trend Over Time</div>
               <div className="flex items-center gap-2">
                 <Select
@@ -433,7 +443,7 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
                     }
                   }}
                 >
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-[140px] text-xs md:text-sm">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -453,7 +463,7 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
                       <Button
                         variant="outline"
                         className={cn(
-                          "w-[240px] justify-start text-left font-normal",
+                          "w-[180px] md:w-[240px] justify-start text-left font-normal text-xs md:text-sm",
                           (!customDateRange?.from || !customDateRange?.to) && "text-muted-foreground"
                         )}
                       >
@@ -485,30 +495,36 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
                             setDateRangePopoverOpen(false);
                           }
                         }}
-                        numberOfMonths={2}
+                        numberOfMonths={isMobile ? 1 : 2}
                       />
                     </PopoverContent>
                   </Popover>
                 )}
               </div>
             </div>
-            <div className="h-80">
-              <ChartContainer config={chartConfig}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                    <XAxis
-                      dataKey="period"
-                      stroke="currentColor"
-                      angle={-45}
-                      textAnchor="end"
-                      height={80}
-                    />
+            <div className="space-y-2">
+              <div className="h-64 md:h-80 w-full">
+                <ChartContainer 
+                  config={chartConfig} 
+                  className="h-full w-full !p-0 !gap-0 !border-0 !bg-transparent !shadow-none"
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData} margin={{ top: 5, right: 10, left: 5, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                      <XAxis
+                        dataKey="period"
+                        stroke="currentColor"
+                        angle={-45}
+                        textAnchor="end"
+                        height={60}
+                        tick={{ fontSize: 11 }}
+                      />
                     <YAxis
                       domain={[-0.25, 2.25]}
                       allowDataOverflow
                       ticks={[0, 1, 2]}
                       stroke="currentColor"
+                      tick={{ fontSize: 11 }}
                       tickFormatter={(value: number) => {
                         const key = habitRatingOrder[value as 0 | 1 | 2] ?? "okay";
                         return habitRatingLabels[key];
@@ -548,35 +564,46 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
                         );
                       }}
                     />
-                    <Legend
-                      wrapperStyle={{ paddingTop: "20px" }}
-                      iconType="line"
-                      formatter={(value: string) => {
-                        const habit = habits?.find((h) => h.id === value);
-                        return habit?.name ?? value;
+                      {habits?.map((habit) => (
+                        <Line
+                          key={habit.id}
+                          type="monotone"
+                          dataKey={habit.id}
+                          stroke={habitColors[habit.id]}
+                          strokeWidth={2}
+                          dot={false}
+                          connectNulls={false}
+                        />
+                      ))}
+                    </LineChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              </div>
+              <div className="flex flex-wrap items-center justify-center gap-3 px-2 pt-2 pb-1 text-xs">
+                {habits?.map((habit, index) => (
+                  <div
+                    key={`legend-item-${habit.id}`}
+                    className="flex items-center gap-1.5"
+                  >
+                    <div
+                      className="h-3 w-3 rounded-sm"
+                      style={{
+                        backgroundColor: habitColors[habit.id] ?? "rgb(156, 163, 175)",
                       }}
                     />
-                    {habits?.map((habit) => (
-                      <Line
-                        key={habit.id}
-                        type="monotone"
-                        dataKey={habit.id}
-                        stroke={habitColors[habit.id]}
-                        strokeWidth={2}
-                        dot={false}
-                        connectNulls={false}
-                      />
-                    ))}
-                  </LineChart>
-                </ResponsiveContainer>
-              </ChartContainer>
+                    <span className="text-xs text-muted-foreground">
+                      {habit.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
         {/* Quick Status Grid */}
         <div>
-          <div className="mb-4 text-sm font-medium">Habit Status</div>
+          <div className="mb-3 md:mb-4 text-sm font-medium">Habit Status</div>
           <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
             {habits.map((habit) => {
               const logs = logsMap.get(habit.id) ?? [];
