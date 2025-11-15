@@ -11,9 +11,15 @@ export async function GET() {
   try {
     await connectToDatabase();
 
-    const today = normalizeDay(new Date());
-    const nextDay = addDays(today, 1);
-    const range = dayRange(nextDay);
+    const now = new Date();
+    // Get local date for display (midnight in user's timezone)
+    const todayLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const nextDayLocal = addDays(todayLocal, 1);
+    // Use UTC normalization for querying - normalize the local date to ensure consistency
+    // Query for events that match tomorrow's local date
+    const rangeStart = normalizeDay(nextDayLocal);
+    const rangeEnd = normalizeDay(new Date(nextDayLocal.getFullYear(), nextDayLocal.getMonth(), nextDayLocal.getDate() + 1));
+    const range = { start: rangeStart, end: rangeEnd };
 
     const [events, backlog] = await Promise.all([
       Event.find({ day: { $gte: range.start, $lt: range.end } })
@@ -43,7 +49,7 @@ export async function GET() {
     );
 
     return jsonResponse({
-      day: nextDay,
+      day: nextDayLocal,
       events: eventResults,
       backlog: backlogResults,
     });

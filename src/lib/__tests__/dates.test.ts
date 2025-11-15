@@ -9,11 +9,12 @@ describe("dates utilities", () => {
   const sampleDate = new Date("2025-03-15T15:45:00Z");
 
   describe("normalizeDay", () => {
-    it("returns the start of the day", () => {
+    it("returns UTC midnight for the given day", () => {
       const normalized = normalizeDay(sampleDate);
-      expect(normalized.getHours()).toBe(0);
-      expect(normalized.getMinutes()).toBe(0);
-      expect(normalized.getSeconds()).toBe(0);
+      expect(normalized.getUTCHours()).toBe(0);
+      expect(normalized.getUTCMinutes()).toBe(0);
+      expect(normalized.getUTCSeconds()).toBe(0);
+      expect(normalized.toISOString()).toBe("2025-03-15T00:00:00.000Z");
     });
   });
 

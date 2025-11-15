@@ -11,7 +11,19 @@ export function normalizePeriodStart(
 
 export function normalizeDay(date: Date | string) {
   const instance = typeof date === "string" ? new Date(date) : date;
-  return startOfDay(instance);
+  // Normalize to UTC midnight for the date
+  // Always use local date components to ensure consistency:
+  // - When creating events, dates come from the form as local dates
+  // - When querying, we create local dates for "today"/"tomorrow"
+  // - This ensures the same local date always maps to the same UTC date
+  // - Even if a UTC date is passed, we interpret it in local timezone for consistency
+  return new Date(
+    Date.UTC(
+      instance.getFullYear(),
+      instance.getMonth(),
+      instance.getDate()
+    )
+  );
 }
 
 export function dayRange(date: Date | string) {
