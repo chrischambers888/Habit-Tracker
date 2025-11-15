@@ -323,6 +323,366 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
     return config;
   }, [habits, habitColors]);
 
+  // Calculate habit progress items - must be before early returns to maintain hook order
+  const habitProgressContent = React.useMemo(() => {
+    if (!habits || habits.length === 0) return null;
+
+    type ProgressItem = {
+      habit: typeof habits[0];
+      type: "hot-streak" | "needs-attention" | "improving" | "declining" | "new-activity";
+      message: string;
+      streakCount?: number;
+      recentAverage?: number;
+      previousAverage?: number;
+      recentRating?: keyof typeof habitRatingLabels;
+    };
+
+    const progressItems: ProgressItem[] = [];
+
+    habits.forEach((habit) => {
+      const logs = logsMap.get(habit.id) ?? [];
+      if (logs.length === 0) return;
+
+      // Sort logs by periodStart (most recent first)
+      const sortedLogs = [...logs].sort((a, b) => 
+        new Date(b.periodStart).getTime() - new Date(a.periodStart).getTime()
+      );
+
+      // Calculate consecutive streak from most recent
+      // Count consecutive ratings of the same type from the most recent log
+      let goodStreak = 0;
+      let badStreak = 0;
+      
+      if (sortedLogs.length > 0) {
+        const mostRecentRating = sortedLogs[0].rating;
+        
+        // Count consecutive ratings matching the most recent rating type
+        if (mostRecentRating === "good") {
+          for (const log of sortedLogs) {
+            if (log.rating === "good") {
+              goodStreak++;
+            } else {
+              break; // Streak broken by different rating
+            }
+          }
+        } else if (mostRecentRating === "bad") {
+          for (const log of sortedLogs) {
+            if (log.rating === "bad") {
+              badStreak++;
+            } else {
+              break; // Streak broken by different rating
+            }
+          }
+        }
+      }
+
+      // Hot Streak: 3+ consecutive Good ratings
+      if (goodStreak >= 3) {
+        progressItems.push({
+          habit,
+          type: "hot-streak",
+          message: `${goodStreak} consecutive ${goodStreak === 1 ? "Good rating" : "Good ratings"}`,
+          streakCount: goodStreak,
+        });
+        return; // Don't check other categories if hot streak
+      }
+
+      // Needs Attention: 3+ consecutive Bad ratings
+      if (badStreak >= 3) {
+        progressItems.push({
+          habit,
+          type: "needs-attention",
+          message: `${badStreak} consecutive ${badStreak === 1 ? "Bad rating" : "Bad ratings"}`,
+          streakCount: badStreak,
+        });
+        return; // Don't check other categories if needs attention
+      }
+
+      // Need at least 4 logs to compare recent vs previous
+      if (logs.length >= 4) {
+        // Split into recent (last 3-5) and previous (before that)
+        const recentCount = Math.min(5, Math.floor(logs.length / 2));
+        const recentLogs = sortedLogs.slice(0, recentCount);
+        const previousLogs = sortedLogs.slice(recentCount, recentCount + Math.min(5, logs.length - recentCount));
+
+        if (previousLogs.length > 0) {
+          const recentAverage = recentLogs.reduce((sum, log) => sum + ratingValue[log.rating], 0) / recentLogs.length;
+          const previousAverage = previousLogs.reduce((sum, log) => sum + ratingValue[log.rating], 0) / previousLogs.length;
+          const difference = recentAverage - previousAverage;
+
+          // Improving: Recent average is ≥1 level better (difference ≥ 0.5)
+          if (difference >= 0.5) {
+            const recentKey = habitRatingOrder[Math.round(recentAverage) as 0 | 1 | 2] ?? "okay";
+            const previousKey = habitRatingOrder[Math.round(previousAverage) as 0 | 1 | 2] ?? "okay";
+            
+            if (recentKey !== previousKey) {
+              progressItems.push({
+                habit,
+                type: "improving",
+                message: `Improved from ${habitRatingLabels[previousKey]} to ${habitRatingLabels[recentKey]}`,
+                recentAverage,
+                previousAverage,
+                recentRating: recentKey,
+              });
+              return;
+            }
+          }
+
+          // Declining: Recent average is ≥1 level worse (difference ≤ -0.5)
+          if (difference <= -0.5) {
+            const recentKey = habitRatingOrder[Math.round(recentAverage) as 0 | 1 | 2] ?? "okay";
+            const previousKey = habitRatingOrder[Math.round(previousAverage) as 0 | 1 | 2] ?? "okay";
+            
+            if (recentKey !== previousKey) {
+              progressItems.push({
+                habit,
+                type: "declining",
+                message: `Declined from ${habitRatingLabels[previousKey]} to ${habitRatingLabels[recentKey]}`,
+                recentAverage,
+                previousAverage,
+                recentRating: recentKey,
+              });
+              return;
+            }
+          }
+        }
+      }
+
+      // New Activity: Recent log after a gap (if there's a log from last 2 periods and the one before that is older)
+      if (sortedLogs.length >= 2) {
+        const mostRecent = new Date(sortedLogs[0].periodStart);
+        const secondRecent = new Date(sortedLogs[1].periodStart);
+        const daysDiff = (mostRecent.getTime() - secondRecent.getTime()) / (1000 * 60 * 60 * 24);
+        
+        // If gap is significant (more than 2 periods worth of days based on frequency)
+        const gapThreshold = habit.frequency === "daily" ? 14 : habit.frequency === "weekly" ? 21 : 60;
+        
+        if (daysDiff > gapThreshold && sortedLogs[0].rating === "good") {
+          progressItems.push({
+            habit,
+            type: "new-activity",
+            message: `Back on track after ${Math.round(daysDiff)} day gap`,
+            recentRating: sortedLogs[0].rating,
+          });
+        }
+      }
+    });
+
+    if (progressItems.length === 0) {
+      return (
+        <div className="rounded-lg border border-dashed p-8 text-center">
+          <p className="text-sm text-muted-foreground">
+            No significant changes detected. Keep tracking your habits!
+          </p>
+        </div>
+      );
+    }
+
+    // Group by type
+    const grouped: Record<string, ProgressItem[]> = {
+      "hot-streak": [],
+      "improving": [],
+      "new-activity": [],
+      "declining": [],
+      "needs-attention": [],
+    };
+
+    progressItems.forEach(item => {
+      grouped[item.type].push(item);
+    });
+
+    // Sort within each group (by streak count or recency)
+    Object.keys(grouped).forEach(key => {
+      grouped[key].sort((a, b) => {
+        if (a.streakCount && b.streakCount) {
+          return b.streakCount - a.streakCount;
+        }
+        return 0;
+      });
+    });
+
+    return (
+      <div className="space-y-4">
+        {/* Hot Streaks */}
+        {grouped["hot-streak"].length > 0 && (
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-muted-foreground flex items-center gap-2">
+              <span>🔥</span> Hot Streaks
+            </h3>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {grouped["hot-streak"].map((item) => (
+                <div
+                  key={item.habit.id}
+                  className="group relative overflow-hidden rounded-lg border border-green-500/20 bg-green-500/5 p-4 transition-all hover:shadow-md hover:border-green-500/30"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-sm leading-tight truncate">
+                        {item.habit.name}
+                      </h4>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {item.message}
+                      </p>
+                    </div>
+                    <div className="text-2xl">🔥</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Improving */}
+        {grouped["improving"].length > 0 && (
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-muted-foreground flex items-center gap-2">
+              <span>✨</span> Improving
+            </h3>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {grouped["improving"].map((item) => (
+                <div
+                  key={item.habit.id}
+                  className="group relative overflow-hidden rounded-lg border border-blue-500/20 bg-blue-500/5 p-4 transition-all hover:shadow-md hover:border-blue-500/30"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-sm leading-tight truncate">
+                        {item.habit.name}
+                      </h4>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {item.message}
+                      </p>
+                      {item.recentRating && (
+                        <span
+                          className={cn(
+                            "mt-2 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium capitalize",
+                            habitRatingStyles[item.recentRating].softBadge
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "h-1.5 w-1.5 rounded-full",
+                              habitRatingStyles[item.recentRating].dot
+                            )}
+                          />
+                          Current: {habitRatingLabels[item.recentRating]}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-2xl">📈</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* New Activity */}
+        {grouped["new-activity"].length > 0 && (
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-muted-foreground flex items-center gap-2">
+              <span>🎯</span> Back on Track
+            </h3>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {grouped["new-activity"].map((item) => (
+                <div
+                  key={item.habit.id}
+                  className="group relative overflow-hidden rounded-lg border border-purple-500/20 bg-purple-500/5 p-4 transition-all hover:shadow-md hover:border-purple-500/30"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-sm leading-tight truncate">
+                        {item.habit.name}
+                      </h4>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {item.message}
+                      </p>
+                    </div>
+                    <div className="text-2xl">🎯</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Declining */}
+        {grouped["declining"].length > 0 && (
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-muted-foreground flex items-center gap-2">
+              <span>📉</span> Declining
+            </h3>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {grouped["declining"].map((item) => (
+                <div
+                  key={item.habit.id}
+                  className="group relative overflow-hidden rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 transition-all hover:shadow-md hover:border-orange-500/30"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-sm leading-tight truncate">
+                        {item.habit.name}
+                      </h4>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {item.message}
+                      </p>
+                      {item.recentRating && (
+                        <span
+                          className={cn(
+                            "mt-2 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium capitalize",
+                            habitRatingStyles[item.recentRating].softBadge
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "h-1.5 w-1.5 rounded-full",
+                              habitRatingStyles[item.recentRating].dot
+                            )}
+                          />
+                          Current: {habitRatingLabels[item.recentRating]}
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-2xl">📉</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Needs Attention (Bad Streaks) */}
+        {grouped["needs-attention"].length > 0 && (
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-muted-foreground flex items-center gap-2">
+              <span>⚠️</span> Needs Attention
+            </h3>
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {grouped["needs-attention"].map((item) => (
+                <div
+                  key={item.habit.id}
+                  className="group relative overflow-hidden rounded-lg border border-red-500/20 bg-red-500/5 p-4 transition-all hover:shadow-md hover:border-red-500/30"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-sm leading-tight truncate">
+                        {item.habit.name}
+                      </h4>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {item.message}
+                      </p>
+                    </div>
+                    <div className="text-2xl">⚠️</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }, [habits, logsMap]);
+
   if (isLoadingHabits || isLoadingLogs) {
     return (
       <Card className={className}>
@@ -741,364 +1101,7 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
               </div>
             </DialogContent>
           </Dialog>
-          {React.useMemo(() => {
-            if (!habits || habits.length === 0) return null;
-
-            type ProgressItem = {
-              habit: typeof habits[0];
-              type: "hot-streak" | "needs-attention" | "improving" | "declining" | "new-activity";
-              message: string;
-              streakCount?: number;
-              recentAverage?: number;
-              previousAverage?: number;
-              recentRating?: keyof typeof habitRatingLabels;
-            };
-
-            const progressItems: ProgressItem[] = [];
-
-            habits.forEach((habit) => {
-              const logs = logsMap.get(habit.id) ?? [];
-              if (logs.length === 0) return;
-
-              // Sort logs by periodStart (most recent first)
-              const sortedLogs = [...logs].sort((a, b) => 
-                new Date(b.periodStart).getTime() - new Date(a.periodStart).getTime()
-              );
-
-              // Calculate consecutive streak from most recent
-              // Count consecutive ratings of the same type from the most recent log
-              let goodStreak = 0;
-              let badStreak = 0;
-              
-              if (sortedLogs.length > 0) {
-                const mostRecentRating = sortedLogs[0].rating;
-                
-                // Count consecutive ratings matching the most recent rating type
-                if (mostRecentRating === "good") {
-                  for (const log of sortedLogs) {
-                    if (log.rating === "good") {
-                      goodStreak++;
-                    } else {
-                      break; // Streak broken by different rating
-                    }
-                  }
-                } else if (mostRecentRating === "bad") {
-                  for (const log of sortedLogs) {
-                    if (log.rating === "bad") {
-                      badStreak++;
-                    } else {
-                      break; // Streak broken by different rating
-                    }
-                  }
-                }
-              }
-
-              // Hot Streak: 3+ consecutive Good ratings
-              if (goodStreak >= 3) {
-                progressItems.push({
-                  habit,
-                  type: "hot-streak",
-                  message: `${goodStreak} consecutive ${goodStreak === 1 ? "Good rating" : "Good ratings"}`,
-                  streakCount: goodStreak,
-                });
-                return; // Don't check other categories if hot streak
-              }
-
-              // Needs Attention: 3+ consecutive Bad ratings
-              if (badStreak >= 3) {
-                progressItems.push({
-                  habit,
-                  type: "needs-attention",
-                  message: `${badStreak} consecutive ${badStreak === 1 ? "Bad rating" : "Bad ratings"}`,
-                  streakCount: badStreak,
-                });
-                return; // Don't check other categories if needs attention
-              }
-
-              // Need at least 4 logs to compare recent vs previous
-              if (logs.length >= 4) {
-                // Split into recent (last 3-5) and previous (before that)
-                const recentCount = Math.min(5, Math.floor(logs.length / 2));
-                const recentLogs = sortedLogs.slice(0, recentCount);
-                const previousLogs = sortedLogs.slice(recentCount, recentCount + Math.min(5, logs.length - recentCount));
-
-                if (previousLogs.length > 0) {
-                  const recentAverage = recentLogs.reduce((sum, log) => sum + ratingValue[log.rating], 0) / recentLogs.length;
-                  const previousAverage = previousLogs.reduce((sum, log) => sum + ratingValue[log.rating], 0) / previousLogs.length;
-                  const difference = recentAverage - previousAverage;
-
-                  // Improving: Recent average is ≥1 level better (difference ≥ 0.5)
-                  if (difference >= 0.5) {
-                    const recentKey = habitRatingOrder[Math.round(recentAverage) as 0 | 1 | 2] ?? "okay";
-                    const previousKey = habitRatingOrder[Math.round(previousAverage) as 0 | 1 | 2] ?? "okay";
-                    
-                    if (recentKey !== previousKey) {
-                      progressItems.push({
-                        habit,
-                        type: "improving",
-                        message: `Improved from ${habitRatingLabels[previousKey]} to ${habitRatingLabels[recentKey]}`,
-                        recentAverage,
-                        previousAverage,
-                        recentRating: recentKey,
-                      });
-                      return;
-                    }
-                  }
-
-                  // Declining: Recent average is ≥1 level worse (difference ≤ -0.5)
-                  if (difference <= -0.5) {
-                    const recentKey = habitRatingOrder[Math.round(recentAverage) as 0 | 1 | 2] ?? "okay";
-                    const previousKey = habitRatingOrder[Math.round(previousAverage) as 0 | 1 | 2] ?? "okay";
-                    
-                    if (recentKey !== previousKey) {
-                      progressItems.push({
-                        habit,
-                        type: "declining",
-                        message: `Declined from ${habitRatingLabels[previousKey]} to ${habitRatingLabels[recentKey]}`,
-                        recentAverage,
-                        previousAverage,
-                        recentRating: recentKey,
-                      });
-                      return;
-                    }
-                  }
-                }
-              }
-
-              // New Activity: Recent log after a gap (if there's a log from last 2 periods and the one before that is older)
-              if (sortedLogs.length >= 2) {
-                const mostRecent = new Date(sortedLogs[0].periodStart);
-                const secondRecent = new Date(sortedLogs[1].periodStart);
-                const daysDiff = (mostRecent.getTime() - secondRecent.getTime()) / (1000 * 60 * 60 * 24);
-                
-                // If gap is significant (more than 2 periods worth of days based on frequency)
-                const gapThreshold = habit.frequency === "daily" ? 14 : habit.frequency === "weekly" ? 21 : 60;
-                
-                if (daysDiff > gapThreshold && sortedLogs[0].rating === "good") {
-                  progressItems.push({
-                    habit,
-                    type: "new-activity",
-                    message: `Back on track after ${Math.round(daysDiff)} day gap`,
-                    recentRating: sortedLogs[0].rating,
-                  });
-                }
-              }
-            });
-
-            if (progressItems.length === 0) {
-              return (
-                <div className="rounded-lg border border-dashed p-8 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    No significant changes detected. Keep tracking your habits!
-                  </p>
-                </div>
-              );
-            }
-
-            // Group by type
-            const grouped: Record<string, ProgressItem[]> = {
-              "hot-streak": [],
-              "improving": [],
-              "new-activity": [],
-              "declining": [],
-              "needs-attention": [],
-            };
-
-            progressItems.forEach(item => {
-              grouped[item.type].push(item);
-            });
-
-            // Sort within each group (by streak count or recency)
-            Object.keys(grouped).forEach(key => {
-              grouped[key].sort((a, b) => {
-                if (a.streakCount && b.streakCount) {
-                  return b.streakCount - a.streakCount;
-                }
-                return 0;
-              });
-            });
-
-            return (
-              <div className="space-y-4">
-                {/* Hot Streaks */}
-                {grouped["hot-streak"].length > 0 && (
-                  <div>
-                    <h3 className="mb-2 text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                      <span>🔥</span> Hot Streaks
-                    </h3>
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                      {grouped["hot-streak"].map((item) => (
-                        <div
-                          key={item.habit.id}
-                          className="group relative overflow-hidden rounded-lg border border-green-500/20 bg-green-500/5 p-4 transition-all hover:shadow-md hover:border-green-500/30"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-sm leading-tight truncate">
-                                {item.habit.name}
-                              </h4>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {item.message}
-                              </p>
-                            </div>
-                            <div className="text-2xl">🔥</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Improving */}
-                {grouped["improving"].length > 0 && (
-                  <div>
-                    <h3 className="mb-2 text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                      <span>✨</span> Improving
-                    </h3>
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                      {grouped["improving"].map((item) => (
-                        <div
-                          key={item.habit.id}
-                          className="group relative overflow-hidden rounded-lg border border-blue-500/20 bg-blue-500/5 p-4 transition-all hover:shadow-md hover:border-blue-500/30"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-sm leading-tight truncate">
-                                {item.habit.name}
-                              </h4>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {item.message}
-                              </p>
-                              {item.recentRating && (
-                                <span
-                                  className={cn(
-                                    "mt-2 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium capitalize",
-                                    habitRatingStyles[item.recentRating].softBadge
-                                  )}
-                                >
-                                  <span
-                                    className={cn(
-                                      "h-1.5 w-1.5 rounded-full",
-                                      habitRatingStyles[item.recentRating].dot
-                                    )}
-                                  />
-                                  Current: {habitRatingLabels[item.recentRating]}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-2xl">📈</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* New Activity */}
-                {grouped["new-activity"].length > 0 && (
-                  <div>
-                    <h3 className="mb-2 text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                      <span>🎯</span> Back on Track
-                    </h3>
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                      {grouped["new-activity"].map((item) => (
-                        <div
-                          key={item.habit.id}
-                          className="group relative overflow-hidden rounded-lg border border-purple-500/20 bg-purple-500/5 p-4 transition-all hover:shadow-md hover:border-purple-500/30"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-sm leading-tight truncate">
-                                {item.habit.name}
-                              </h4>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {item.message}
-                              </p>
-                            </div>
-                            <div className="text-2xl">🎯</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Declining */}
-                {grouped["declining"].length > 0 && (
-                  <div>
-                    <h3 className="mb-2 text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                      <span>📉</span> Declining
-                    </h3>
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                      {grouped["declining"].map((item) => (
-                        <div
-                          key={item.habit.id}
-                          className="group relative overflow-hidden rounded-lg border border-orange-500/20 bg-orange-500/5 p-4 transition-all hover:shadow-md hover:border-orange-500/30"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-sm leading-tight truncate">
-                                {item.habit.name}
-                              </h4>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {item.message}
-                              </p>
-                              {item.recentRating && (
-                                <span
-                                  className={cn(
-                                    "mt-2 inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium capitalize",
-                                    habitRatingStyles[item.recentRating].softBadge
-                                  )}
-                                >
-                                  <span
-                                    className={cn(
-                                      "h-1.5 w-1.5 rounded-full",
-                                      habitRatingStyles[item.recentRating].dot
-                                    )}
-                                  />
-                                  Current: {habitRatingLabels[item.recentRating]}
-                                </span>
-                              )}
-                            </div>
-                            <div className="text-2xl">📉</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Needs Attention (Bad Streaks) */}
-                {grouped["needs-attention"].length > 0 && (
-                  <div>
-                    <h3 className="mb-2 text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                      <span>⚠️</span> Needs Attention
-                    </h3>
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                      {grouped["needs-attention"].map((item) => (
-                        <div
-                          key={item.habit.id}
-                          className="group relative overflow-hidden rounded-lg border border-red-500/20 bg-red-500/5 p-4 transition-all hover:shadow-md hover:border-red-500/30"
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-sm leading-tight truncate">
-                                {item.habit.name}
-                              </h4>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                {item.message}
-                              </p>
-                            </div>
-                            <div className="text-2xl">⚠️</div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          }, [habits, logsMap])}
+          {habitProgressContent}
         </div>
       </CardContent>
     </Card>

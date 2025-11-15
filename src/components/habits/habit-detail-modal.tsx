@@ -244,13 +244,13 @@ export function HabitDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b">
+      <DialogContent className="max-w-4xl h-[100dvh] md:h-[90vh] flex flex-col p-0 overflow-hidden m-0 max-h-[100dvh] rounded-none md:rounded-lg w-full md:w-auto">
+        <DialogHeader className="px-4 md:px-6 pt-4 md:pt-6 pb-4 flex-shrink-0 border-b">
           <DialogTitle>{habit.name}</DialogTitle>
         </DialogHeader>
         <div className="flex-1 min-h-0 overflow-hidden">
-          <ScrollArea className="h-full px-6">
-            <div className="space-y-6 pb-6">
+          <ScrollArea className="h-full">
+            <div className="space-y-6 pb-6 px-4 md:px-6">
               <Card>
                 <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-4">
                   <div className="space-y-1">
@@ -617,27 +617,31 @@ export function HabitDetailModal({
                     </div>
                   </ScrollArea>
                 ) : (
-                  <div className="space-y-4">
-                    <div className="rounded-lg border p-6">
-                      <Calendar
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={setSelectedDate}
-                        modifiers={{
-                          hasLogs: datesWithLogs,
-                        }}
-                        modifiersClassNames={{
-                          hasLogs: "relative",
-                        }}
-                        className="w-full [--cell-size:2.5rem]"
-                        classNames={{
-                          table: "w-full border-collapse",
-                          weekdays: "flex",
-                          weekday:
-                            "flex-1 text-center text-sm font-medium text-muted-foreground",
-                          week: "mt-2 w-full",
-                          day: "relative aspect-square h-full w-full p-0 text-center text-sm",
-                        }}
+                  <div className="space-y-4 min-w-0">
+                    <div className="rounded-lg border p-3 md:p-6 overflow-x-auto -mx-3 px-3 md:mx-0 md:px-0">
+                      <div className="min-w-fit flex justify-center">
+                        <Calendar
+                          mode="single"
+                          selected={selectedDate}
+                          onSelect={setSelectedDate}
+                          modifiers={{
+                            hasLogs: datesWithLogs,
+                          }}
+                          modifiersClassNames={{
+                            hasLogs: "relative",
+                          }}
+                          className="[--cell-size:2.5rem] md:[--cell-size:2.5rem] [--cell-size:2rem]"
+                          classNames={{
+                            root: "w-fit",
+                            months: "w-fit",
+                            month: "w-fit",
+                            table: "border-collapse",
+                            weekdays: "flex",
+                            weekday:
+                              "text-center text-sm font-medium text-muted-foreground w-[--cell-size]",
+                            week: "mt-2 flex",
+                            day: "relative aspect-square h-[--cell-size] w-[--cell-size] p-0 text-center text-sm",
+                          }}
                         components={{
                           Day: (props) => {
                             const { day, ...tdProps } = props;
@@ -651,11 +655,11 @@ export function HabitDetailModal({
                                 selectedDate.toISOString().split("T")[0];
 
                             return (
-                              <td {...tdProps} className={cn("relative h-full w-full", tdProps.className)}>
+                              <td {...tdProps} className={cn("relative h-[--cell-size] w-[--cell-size] p-0", tdProps.className)}>
                                 <Button
                                   variant="ghost"
                                   className={cn(
-                                    "h-full w-full font-normal",
+                                    "h-full w-full font-normal p-0",
                                     isSelected &&
                                       "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
                                   )}
@@ -684,6 +688,7 @@ export function HabitDetailModal({
                           },
                         }}
                       />
+                      </div>
                     </div>
                     {selectedDate && selectedDateLogs.length > 0 && (
                       <div className="space-y-2">
