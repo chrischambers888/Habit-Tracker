@@ -13,6 +13,7 @@ const BacklogItemSchema = new Schema(
     category: { type: String, trim: true },
     isCompleted: { type: Boolean, default: false },
     completedAt: { type: Date },
+    order: { type: Number, default: 0 },
   },
   {
     timestamps: true,

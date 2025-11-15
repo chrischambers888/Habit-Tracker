@@ -8,7 +8,10 @@ import {
   scheduleApi,
 } from "@/lib/api-client";
 import type { FavoriteEventUpdateInput } from "@/lib/schemas/favorite-event";
-import type { BacklogItemUpdateInput } from "@/lib/schemas/backlog-item";
+import type {
+  BacklogItemUpdateInput,
+  BacklogItemResponse,
+} from "@/lib/schemas/backlog-item";
 import type { EventUpdateInput } from "@/lib/schemas/event";
 
 export function useTodaySchedule() {
@@ -259,6 +262,76 @@ export function useDeleteBacklogItem() {
     onError: (error: Error) => {
       toast({
         title: "Unable to delete backlog item",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+}
+
+export function useReorderBacklogItems() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: backlogApi.reorder,
+    onMutate: async (itemIds: string[]) => {
+      // Cancel any outgoing refetches
+      await queryClient.cancelQueries({ queryKey: queryKeys.backlog });
+
+      // Snapshot the previous value
+      const previousItems = queryClient.getQueryData<BacklogItemResponse[]>(
+        queryKeys.backlog
+      );
+
+      // Optimistically update to the new value
+      if (previousItems) {
+        const openItems = previousItems.filter((item) => !item.isCompleted);
+        const completedItems = previousItems.filter((item) => item.isCompleted);
+        
+        // Create a map for quick lookup
+        const itemMap = new Map(openItems.map((item) => [item.id, item]));
+        
+        // Reorder open items based on itemIds order
+        const reorderedOpenItems = itemIds
+          .map((id) => itemMap.get(id))
+          .filter((item): item is BacklogItemResponse => item !== undefined);
+        
+        // Add any items that weren't in itemIds (shouldn't happen, but safety check)
+        const remainingItems = openItems.filter(
+          (item) => !itemIds.includes(item.id)
+        );
+        
+        // Update order values and combine
+        const updatedOpenItems = [
+          ...reorderedOpenItems.map((item, index) => ({
+            ...item,
+            order: index,
+          })),
+          ...remainingItems.map((item, index) => ({
+            ...item,
+            order: reorderedOpenItems.length + index,
+          })),
+        ];
+
+        const updatedItems = [...updatedOpenItems, ...completedItems];
+        
+        queryClient.setQueryData(queryKeys.backlog, updatedItems);
+      }
+
+      return { previousItems };
+    },
+    onSuccess: () => {
+      // Don't refetch - the optimistic update is correct
+      // The order is already updated in the query cache
+      // Natural refetches (window focus, etc.) will sync eventually
+    },
+    onError: (error: Error, _itemIds, context) => {
+      // Rollback to previous value on error
+      if (context?.previousItems) {
+        queryClient.setQueryData(queryKeys.backlog, context.previousItems);
+      }
+      toast({
+        title: "Unable to reorder backlog items",
         description: error.message,
         variant: "destructive",
       });

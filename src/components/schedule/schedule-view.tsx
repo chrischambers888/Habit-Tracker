@@ -136,7 +136,9 @@ export function ScheduleView() {
         </div>
 
         <div className="space-y-6">
-          <FavoritesPanel today={todaySchedule?.day ?? new Date()} nextDay={nextDay} />
+          <div className="hidden lg:block">
+            <FavoritesPanel today={todaySchedule?.day ?? new Date()} nextDay={nextDay} />
+          </div>
           <BacklogPanel />
         </div>
       </div>

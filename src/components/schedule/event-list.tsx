@@ -59,8 +59,6 @@ export function EventList({
   };
 
   const handleDelete = (event: EventResponse) => {
-    const confirmed = window.confirm(`Delete event "${event.title}"?`);
-    if (!confirmed) return;
     deleteEvent.mutate(event.id);
   };
 

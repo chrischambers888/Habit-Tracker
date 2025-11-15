@@ -24,6 +24,7 @@ export async function GET() {
       eventResponseSchema.parse({
         ...event,
         id: event._id.toString(),
+        favoriteId: event.favoriteId?.toString(),
         createdAt: event.createdAt,
         updatedAt: event.updatedAt,
       }),

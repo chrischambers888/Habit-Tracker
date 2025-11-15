@@ -17,6 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Star, Trash } from "lucide-react";
 import { format } from "date-fns";
+import { CreateFavoriteDialog } from "@/components/schedule/create-favorite-dialog";
 
 type FavoritesPanelProps = {
   today: Date;
@@ -49,13 +50,18 @@ export function FavoritesPanel({ today, nextDay }: FavoritesPanelProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Star className="h-5 w-5" />
-          Favorites
-        </CardTitle>
-        <CardDescription>
-          Save routines to quickly schedule them for today or tomorrow.
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Star className="h-5 w-5" />
+              Favorites
+            </CardTitle>
+            <CardDescription>
+              Save routines to quickly schedule them for today or tomorrow.
+            </CardDescription>
+          </div>
+          <CreateFavoriteDialog />
+        </div>
       </CardHeader>
       <CardContent className="space-y-4">
         {isLoading ? (

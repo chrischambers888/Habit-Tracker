@@ -17,11 +17,13 @@ export const backlogItemBaseSchema = z.object({
     .nullable()
     .transform((value) => value ?? undefined),
   isCompleted: z.boolean().optional(),
+  order: z.number().optional(),
 });
 
 export const backlogItemCreateSchema = backlogItemBaseSchema;
 export const backlogItemUpdateSchema = backlogItemBaseSchema.partial().extend({
   completedAt: z.coerce.date().nullable().optional(),
+  order: z.number().optional(),
 });
 
 export const backlogItemResponseSchema = backlogItemBaseSchema.extend({
@@ -29,6 +31,7 @@ export const backlogItemResponseSchema = backlogItemBaseSchema.extend({
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
   completedAt: z.coerce.date().nullable().optional(),
+  order: z.number().optional(),
 });
 
 export type BacklogItemInput = z.infer<typeof backlogItemCreateSchema>;

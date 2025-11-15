@@ -188,6 +188,9 @@ export const backlogApi = {
   delete: async (id: string): Promise<{ id: string }> => {
     return apiMutation(`/api/backlog/${id}`, "DELETE");
   },
+  reorder: async (itemIds: string[]): Promise<{ success: boolean }> => {
+    return apiMutation("/api/backlog/reorder", "PATCH", { itemIds });
+  },
 };
 
 export const scheduleApi = {

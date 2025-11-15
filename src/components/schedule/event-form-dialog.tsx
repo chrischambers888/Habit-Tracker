@@ -24,14 +24,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, Sparkles } from "lucide-react";
@@ -41,6 +33,7 @@ import { eventCreateSchema, eventUpdateSchema } from "@/lib/schemas/event";
 import { useCreateEvent, useUpdateEvent } from "@/hooks/use-schedule";
 import type { FavoriteEventResponse } from "@/lib/schemas/favorite-event";
 import type { EventResponse } from "@/lib/schemas/event";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type EventFormValues = z.input<typeof eventCreateSchema>;
 type EventFormSubmitValues = z.output<typeof eventCreateSchema>;
@@ -70,6 +63,7 @@ export function EventFormDialog({
 }: EventFormDialogProps) {
   const [open, setOpen] = React.useState(false);
   const [submitted, setSubmitted] = React.useState(false);
+  const [favoritePopoverOpen, setFavoritePopoverOpen] = React.useState(false);
   const createEvent = useCreateEvent();
   const updateEvent = useUpdateEvent();
   const isEditMode = !!event;
@@ -95,6 +89,7 @@ export function EventFormDialog({
     form.setValue("startTime", favorite.startTime);
     form.setValue("endTime", favorite.endTime);
     form.setValue("favoriteId", favorite.id);
+    setFavoritePopoverOpen(false);
   };
 
   const onSubmit = async (values: EventFormSubmitValues | EventUpdateFormSubmitValues) => {
@@ -179,6 +174,46 @@ export function EventFormDialog({
         <DialogHeader>
           <DialogTitle>{isEditMode ? "Edit Event" : label}</DialogTitle>
         </DialogHeader>
+        {!isEditMode && favorites.length > 0 && (
+          <div className="flex items-center justify-end pb-2">
+            <Popover open={favoritePopoverOpen} onOpenChange={setFavoritePopoverOpen}>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                      >
+                        <Sparkles className="h-4 w-4" />
+                      </Button>
+                    </PopoverTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Quick add from favorite</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <PopoverContent className="w-64 p-0" align="end">
+                <div className="p-2">
+                  <p className="px-2 py-1.5 text-sm font-semibold">Select a favorite</p>
+                  <div className="mt-1 space-y-1">
+                    {favorites.map((favorite) => (
+                      <button
+                        key={favorite.id}
+                        onClick={() => handleFavoriteSelect(favorite.id)}
+                        className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent hover:text-accent-foreground"
+                      >
+                        {favorite.title}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+        )}
         <Form {...form}>
           <form
             onSubmit={form.handleSubmit(onSubmit)}
@@ -319,28 +354,6 @@ export function EventFormDialog({
                 );
               }}
             />
-            {favorites.length > 0 && (
-              <div className="space-y-2">
-                <Label className="flex items-center gap-2 text-sm font-medium">
-                  <Sparkles className="h-4 w-4" /> Quick add from favorite
-                </Label>
-                <Select onValueChange={handleFavoriteSelect}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a favorite event" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {favorites.map((favorite) => (
-                      <SelectItem key={favorite.id} value={favorite.id}>
-                        {favorite.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-[0.8rem] text-muted-foreground">
-                  Prefill the form using a saved favorite.
-                </p>
-              </div>
-            )}
             <DialogFooter>
               <Button
                 type="submit"

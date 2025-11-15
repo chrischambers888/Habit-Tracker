@@ -43,6 +43,7 @@ export async function GET(request: Request) {
       eventResponseSchema.parse({
         ...event,
         id: event._id.toString(),
+        favoriteId: event.favoriteId?.toString(),
         day: event.day,
         createdAt: event.createdAt,
         updatedAt: event.updatedAt,
