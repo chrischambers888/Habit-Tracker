@@ -213,12 +213,15 @@ export function HabitsOverview({ className }: HabitsOverviewProps) {
 
     // Filter by date range if specified
     if (dateRange && dateRange.from && dateRange.to) {
+      const rangeStart = dateRange.from;
+      const rangeEnd = dateRange.to;
+      const rangeStartTime = rangeStart.getTime();
+      const rangeEndTime = rangeEnd.getTime();
+      
       sortedPeriods = sortedPeriods.filter(([_, periodData]) => {
         const periodStart = periodData.periodStart;
         // Compare dates (period start should be within or equal to the range)
         const periodTime = periodStart.getTime();
-        const rangeStartTime = dateRange.from.getTime();
-        const rangeEndTime = dateRange.to.getTime();
         return periodTime >= rangeStartTime && periodTime <= rangeEndTime;
       });
     } else {
