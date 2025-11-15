@@ -24,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -36,12 +37,15 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { CalendarIcon, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { eventCreateSchema } from "@/lib/schemas/event";
-import { useCreateEvent } from "@/hooks/use-schedule";
+import { eventCreateSchema, eventUpdateSchema } from "@/lib/schemas/event";
+import { useCreateEvent, useUpdateEvent } from "@/hooks/use-schedule";
 import type { FavoriteEventResponse } from "@/lib/schemas/favorite-event";
+import type { EventResponse } from "@/lib/schemas/event";
 
 type EventFormValues = z.input<typeof eventCreateSchema>;
 type EventFormSubmitValues = z.output<typeof eventCreateSchema>;
+type EventUpdateFormValues = z.input<typeof eventUpdateSchema>;
+type EventUpdateFormSubmitValues = z.output<typeof eventUpdateSchema>;
 
 type EventFormDialogProps = {
   variant?: "today" | "next";
@@ -49,7 +53,9 @@ type EventFormDialogProps = {
   defaultDay: Date;
   favorites?: FavoriteEventResponse[];
   trigger?: React.ReactNode;
+  event?: EventResponse; // If provided, dialog is in edit mode
   onCreated?: () => void;
+  onUpdated?: () => void;
 };
 
 export function EventFormDialog({
@@ -58,20 +64,25 @@ export function EventFormDialog({
   defaultDay,
   favorites = [],
   trigger,
+  event,
   onCreated,
+  onUpdated,
 }: EventFormDialogProps) {
   const [open, setOpen] = React.useState(false);
+  const [submitted, setSubmitted] = React.useState(false);
   const createEvent = useCreateEvent();
+  const updateEvent = useUpdateEvent();
+  const isEditMode = !!event;
 
-  const form = useForm<EventFormValues, unknown, EventFormSubmitValues>({
-    resolver: zodResolver(eventCreateSchema),
+  const form = useForm<EventFormValues | EventUpdateFormValues, unknown, EventFormSubmitValues | EventUpdateFormSubmitValues>({
+    resolver: zodResolver(isEditMode ? eventUpdateSchema : eventCreateSchema),
     defaultValues: {
-      day: defaultDay,
-      title: "",
-      description: "",
-      startTime: "",
-      endTime: "",
-      favoriteId: undefined,
+      day: event?.day ? new Date(event.day) : defaultDay,
+      title: event?.title ?? "",
+      description: event?.description ?? "",
+      startTime: event?.startTime,
+      endTime: event?.endTime,
+      favoriteId: event?.favoriteId,
     } satisfies EventFormValues,
   });
 
@@ -81,50 +92,92 @@ export function EventFormDialog({
 
     form.setValue("title", favorite.title);
     form.setValue("description", favorite.description ?? "");
-    form.setValue("startTime", favorite.startTime ?? "");
-    form.setValue("endTime", favorite.endTime ?? "");
+    form.setValue("startTime", favorite.startTime);
+    form.setValue("endTime", favorite.endTime);
     form.setValue("favoriteId", favorite.id);
   };
 
-  const onSubmit = async (values: EventFormSubmitValues) => {
-    await createEvent.mutateAsync(values);
-    form.reset({
-      day: defaultDay,
-      title: "",
-      description: "",
-      startTime: "",
-      endTime: "",
-      favoriteId: undefined,
-    } satisfies EventFormValues);
-    setOpen(false);
-    onCreated?.();
-  };
-
-  React.useEffect(() => {
-    if (open) {
+  const onSubmit = async (values: EventFormSubmitValues | EventUpdateFormSubmitValues) => {
+    if (isEditMode && event) {
+      await updateEvent.mutateAsync({
+        id: event.id,
+        input: values as EventUpdateFormSubmitValues,
+      });
+      setSubmitted(true);
+      setOpen(false);
+      onUpdated?.();
+    } else {
+      await createEvent.mutateAsync(values as EventFormSubmitValues);
       form.reset({
         day: defaultDay,
         title: "",
         description: "",
-        startTime: "",
-        endTime: "",
+        startTime: undefined,
+        endTime: undefined,
         favoriteId: undefined,
       } satisfies EventFormValues);
+      setOpen(false);
+      onCreated?.();
     }
-  }, [defaultDay, form, open]);
+  };
+
+  // Reset form when dialog closes or when switching between create/edit modes
+  React.useEffect(() => {
+    if (!open) {
+      if (isEditMode && event) {
+        form.reset({
+          day: event.day ? new Date(event.day) : defaultDay,
+          title: event.title ?? "",
+          description: event.description ?? "",
+          startTime: event.startTime,
+          endTime: event.endTime,
+          favoriteId: event.favoriteId,
+        } satisfies EventFormValues);
+      } else {
+        form.reset({
+          day: defaultDay,
+          title: "",
+          description: "",
+          startTime: undefined,
+          endTime: undefined,
+          favoriteId: undefined,
+        } satisfies EventFormValues);
+      }
+    }
+  }, [open, defaultDay, form, isEditMode, event]);
+
+  // Auto-open dialog when event is provided (edit mode)
+  React.useEffect(() => {
+    if (event && !open) {
+      setOpen(true);
+    }
+  }, [event, open]);
+
+  const handleOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen);
+    // If dialog is closed in edit mode without submitting, call onUpdated to reset state
+    if (!newOpen && isEditMode && event && !submitted) {
+      onUpdated?.();
+    }
+    if (!newOpen) {
+      setSubmitted(false);
+    }
+  };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {trigger ?? (
-          <Button variant={variant === "today" ? "outline" : "default"}>
-            {label}
-          </Button>
-        )}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {!isEditMode && (
+        <DialogTrigger asChild>
+          {trigger ?? (
+            <Button variant={variant === "today" ? "outline" : "default"}>
+              {label}
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{label}</DialogTitle>
+          <DialogTitle>{isEditMode ? "Edit Event" : label}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form
@@ -184,13 +237,23 @@ export function EventFormDialog({
                 control={form.control}
                 name="startTime"
                 render={({ field }) => {
-                  const { value, ...rest } = field;
+                  const { value, onChange, ...rest } = field;
                   return (
                     <FormItem>
-                      <FormLabel>Start time</FormLabel>
+                      <FormLabel>Start time (optional)</FormLabel>
                       <FormControl>
-                        <Input type="time" {...rest} value={value ?? ""} />
+                        <Input
+                          type="time"
+                          {...rest}
+                          value={value ?? ""}
+                          onChange={(e) => {
+                            onChange(e.target.value || undefined);
+                          }}
+                        />
                       </FormControl>
+                      <FormDescription>
+                        Event won&apos;t happen before this time
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   );
@@ -200,13 +263,23 @@ export function EventFormDialog({
                 control={form.control}
                 name="endTime"
                 render={({ field }) => {
-                  const { value, ...rest } = field;
+                  const { value, onChange, ...rest } = field;
                   return (
                     <FormItem>
-                      <FormLabel>End time</FormLabel>
+                      <FormLabel>End time (optional)</FormLabel>
                       <FormControl>
-                        <Input type="time" {...rest} value={value ?? ""} />
+                        <Input
+                          type="time"
+                          {...rest}
+                          value={value ?? ""}
+                          onChange={(e) => {
+                            onChange(e.target.value || undefined);
+                          }}
+                        />
                       </FormControl>
+                      <FormDescription>
+                        Event will be over by this time
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   );
@@ -247,10 +320,10 @@ export function EventFormDialog({
               }}
             />
             {favorites.length > 0 && (
-              <FormItem>
-                <FormLabel className="flex items-center gap-2 text-sm font-medium">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2 text-sm font-medium">
                   <Sparkles className="h-4 w-4" /> Quick add from favorite
-                </FormLabel>
+                </Label>
                 <Select onValueChange={handleFavoriteSelect}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a favorite event" />
@@ -263,14 +336,23 @@ export function EventFormDialog({
                     ))}
                   </SelectContent>
                 </Select>
-                <FormDescription>
+                <p className="text-[0.8rem] text-muted-foreground">
                   Prefill the form using a saved favorite.
-                </FormDescription>
-              </FormItem>
+                </p>
+              </div>
             )}
             <DialogFooter>
-              <Button type="submit" disabled={createEvent.isPending}>
-                {createEvent.isPending ? "Saving..." : "Save Event"}
+              <Button
+                type="submit"
+                disabled={isEditMode ? updateEvent.isPending : createEvent.isPending}
+              >
+                {isEditMode
+                  ? updateEvent.isPending
+                    ? "Updating..."
+                    : "Update Event"
+                  : createEvent.isPending
+                    ? "Saving..."
+                    : "Save Event"}
               </Button>
             </DialogFooter>
           </form>

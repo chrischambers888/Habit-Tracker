@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,8 +20,10 @@ import {
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import type { EventResponse } from "@/lib/schemas/event";
+import type { FavoriteEventResponse } from "@/lib/schemas/favorite-event";
 import { useUpdateEvent, useDeleteEvent, useCreateFavorite } from "@/hooks/use-schedule";
-import { CalendarClock, Clock, MoreHorizontal, Star } from "lucide-react";
+import { CalendarClock, Clock, MoreHorizontal, Star, Pencil } from "lucide-react";
+import { EventFormDialog } from "@/components/schedule/event-form-dialog";
 
 type EventListProps = {
   title: string;
@@ -28,6 +31,7 @@ type EventListProps = {
   day: Date;
   events: EventResponse[];
   emptyState?: React.ReactNode;
+  favorites?: FavoriteEventResponse[];
 };
 
 export function EventList({
@@ -36,10 +40,12 @@ export function EventList({
   day,
   events,
   emptyState,
+  favorites = [],
 }: EventListProps) {
   const updateEvent = useUpdateEvent();
   const deleteEvent = useDeleteEvent();
   const createFavorite = useCreateFavorite();
+  const [editingEvent, setEditingEvent] = React.useState<EventResponse | null>(null);
 
   const now = new Date();
   const isToday =
@@ -62,8 +68,8 @@ export function EventList({
     createFavorite.mutate({
       title: event.title,
       description: event.description ?? "",
-      startTime: event.startTime ?? "",
-      endTime: event.endTime ?? "",
+      startTime: event.startTime,
+      endTime: event.endTime,
     });
   };
 
@@ -89,9 +95,15 @@ export function EventList({
           events.map((event) => {
             const isCurrent =
               isToday &&
-              event.startTime &&
-              event.endTime &&
-              isWithinTimeRange(event.startTime, event.endTime, now);
+              ((event.startTime &&
+                event.endTime &&
+                isWithinTimeRange(event.startTime, event.endTime, now)) ||
+                (event.startTime &&
+                  !event.endTime &&
+                  now >= getTimeFromString(event.startTime, day)) ||
+                (!event.startTime &&
+                  event.endTime &&
+                  now <= getTimeFromString(event.endTime, day)));
             return (
               <div
                 key={event.id}
@@ -105,33 +117,58 @@ export function EventList({
                 )}
               >
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-base font-semibold">
-                        {event.title}
-                      </h3>
-                      {event.isCompleted && (
-                        <Badge variant="secondary">Done</Badge>
-                      )}
-                    </div>
+                  <div className="flex flex-1 items-start gap-3">
+                    <Checkbox
+                      checked={event.isCompleted}
+                      onCheckedChange={() => handleToggleComplete(event)}
+                      className="mt-1"
+                      aria-label={event.isCompleted ? "Mark as incomplete" : "Mark as complete"}
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3
+                          className={cn(
+                            "text-base font-semibold",
+                            event.isCompleted && "line-through text-muted-foreground"
+                          )}
+                        >
+                          {event.title}
+                        </h3>
+                        {event.isCompleted && (
+                          <Badge variant="secondary">Done</Badge>
+                        )}
+                      </div>
                     <div className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
-                      {event.startTime ? (
+                      {event.startTime && event.endTime ? (
                         <>
                           <Clock className="h-4 w-4" />
                           <span>
-                            {event.startTime}
-                            {event.endTime ? ` – ${event.endTime}` : ""}
+                            {event.startTime} – {event.endTime}
                           </span>
                         </>
+                      ) : event.startTime ? (
+                        <>
+                          <Clock className="h-4 w-4" />
+                          <span>After {event.startTime}</span>
+                        </>
+                      ) : event.endTime ? (
+                        <>
+                          <Clock className="h-4 w-4" />
+                          <span>By {event.endTime}</span>
+                        </>
                       ) : (
-                        <span>No set time</span>
+                        <>
+                          <Clock className="h-4 w-4" />
+                          <span>Sometime today</span>
+                        </>
                       )}
                     </div>
-                    {event.description && (
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        {event.description}
-                      </p>
-                    )}
+                      {event.description && (
+                        <p className="mt-2 text-sm text-muted-foreground">
+                          {event.description}
+                        </p>
+                      )}
+                    </div>
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
@@ -141,6 +178,10 @@ export function EventList({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setEditingEvent(event)}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleToggleComplete(event)}>
                         {event.isCompleted ? "Mark as incomplete" : "Mark as complete"}
                       </DropdownMenuItem>
@@ -157,14 +198,22 @@ export function EventList({
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                <div className="mt-2 text-xs text-muted-foreground">
-                  Created {format(event.createdAt, "MMM d, yyyy")}
-                </div>
               </div>
             );
           })
         )}
       </CardContent>
+      {editingEvent && (
+        <EventFormDialog
+          label="Edit Event"
+          defaultDay={editingEvent.day ? new Date(editingEvent.day) : day}
+          event={editingEvent}
+          favorites={favorites}
+          onUpdated={() => {
+            setEditingEvent(null);
+          }}
+        />
+      )}
     </Card>
   );
 }
@@ -180,5 +229,12 @@ function isWithinTimeRange(startTime: string, endTime: string, current: Date) {
   end.setHours(endHour, endMinute, 0, 0);
 
   return current >= start && current <= end;
+}
+
+function getTimeFromString(timeString: string, day: Date): Date {
+  const [hour, minute] = timeString.split(":").map(Number);
+  const date = new Date(day);
+  date.setHours(hour, minute, 0, 0);
+  return date;
 }
 

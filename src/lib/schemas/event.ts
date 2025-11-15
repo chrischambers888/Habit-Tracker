@@ -11,8 +11,20 @@ export const eventBaseSchema = z.object({
     .optional()
     .nullable()
     .transform((value) => value ?? undefined),
-  startTime: timeStringSchema.optional(),
-  endTime: timeStringSchema.optional(),
+  startTime: z
+    .union([timeStringSchema, z.literal(""), z.null(), z.undefined()])
+    .optional()
+    .transform((value) => {
+      if (!value || value === "" || value === null) return undefined;
+      return value;
+    }),
+  endTime: z
+    .union([timeStringSchema, z.literal(""), z.null(), z.undefined()])
+    .optional()
+    .transform((value) => {
+      if (!value || value === "" || value === null) return undefined;
+      return value;
+    }),
   isCompleted: z.boolean().optional(),
   favoriteId: z.string().optional(),
 });
