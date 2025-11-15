@@ -84,15 +84,20 @@ export function LogHabitDialog({
   const updateLog = useUpdateHabitLog(habitId);
 
   const defaultValues = React.useMemo(
-    () =>
-      ({
-        periodStart: normalizePeriodStart(
-          initialLog ? new Date(initialLog.periodStart) : new Date(),
-          frequency
-        ),
+    () => {
+      // Use local midnight for new logs to ensure we're logging for "today" in the user's timezone
+      const dateForPeriod = initialLog
+        ? new Date(initialLog.periodStart)
+        : (() => {
+            const now = new Date();
+            return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          })();
+      return {
+        periodStart: normalizePeriodStart(dateForPeriod, frequency),
         rating: initialLog?.rating ?? "good",
         comment: initialLog?.comment ?? "",
-      } satisfies LogHabitFormValues),
+      } satisfies LogHabitFormValues;
+    },
     [initialLog, frequency]
   );
 
@@ -139,8 +144,15 @@ export function LogHabitDialog({
 
   React.useEffect(() => {
     if (!open && !isEditing) {
+      // Use local midnight to ensure we're logging for "today" in the user's timezone
+      const now = new Date();
+      const localMidnight = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate()
+      );
       form.reset({
-        periodStart: normalizePeriodStart(new Date(), frequency),
+        periodStart: normalizePeriodStart(localMidnight, frequency),
         rating: "good",
         comment: "",
       } satisfies LogHabitFormValues);

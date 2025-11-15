@@ -135,9 +135,15 @@ export function hasLogForPeriod(
 ) {
   if (!logs?.length) return false;
   const currentKey = getPeriodStartKey(referenceDate, frequency);
-  return logs.some(
-    (log) => getPeriodStartKey(log.periodStart, frequency) === currentKey
-  );
+  return logs.some((log) => {
+    // Ensure periodStart is treated as a Date for consistent comparison
+    const logPeriodStart =
+      log.periodStart instanceof Date
+        ? log.periodStart
+        : new Date(log.periodStart);
+    const logKey = getPeriodStartKey(logPeriodStart, frequency);
+    return logKey === currentKey;
+  });
 }
 
 export function isHabitActiveThisPeriod(

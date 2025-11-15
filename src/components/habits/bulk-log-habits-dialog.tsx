@@ -46,8 +46,10 @@ import {
 import { useBulkUpsertHabitLogs, useHabits } from "@/hooks/use-habits";
 import { habitLogsApi } from "@/lib/api-client";
 import { queryKeys } from "@/lib/query-keys";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   getPeriodStartUtc,
+  getPeriodStartKey,
   habitFrequencyLabels,
   hasLogForPeriod,
   isHabitActiveThisPeriod,
@@ -85,18 +87,25 @@ export function BulkLogHabitsDialog() {
     React.useState<HabitFrequencyFilter>("daily");
   const referenceDateRef = React.useRef(new Date());
 
-  React.useEffect(() => {
-    if (open) {
-      referenceDateRef.current = new Date();
-    }
-  }, [open]);
+  const { data: habits, isLoading: isLoadingHabits } = useHabits();
+  const bulkLogMutation = useBulkUpsertHabitLogs();
+  const queryClient = useQueryClient();
+
+  const habitList = habits ?? [];
 
   const referenceDate = referenceDateRef.current;
 
-  const { data: habits, isLoading: isLoadingHabits } = useHabits();
-  const bulkLogMutation = useBulkUpsertHabitLogs();
-
-  const habitList = habits ?? [];
+  React.useEffect(() => {
+    if (open) {
+      referenceDateRef.current = new Date();
+      // Force refetch all log queries when dialog opens to ensure fresh data
+      habitList.forEach((habit) => {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.habitLogs(habit.id),
+        });
+      });
+    }
+  }, [open, habitList, queryClient]);
 
   const logsQueries = useQueries({
     queries: React.useMemo(
@@ -105,20 +114,35 @@ export function BulkLogHabitsDialog() {
           queryKey: queryKeys.habitLogs(habit.id),
           queryFn: () => habitLogsApi.list(habit.id),
           enabled: open,
-          staleTime: 1000 * 60,
+          staleTime: 0, // Always refetch to ensure fresh data
+          refetchOnMount: true, // Always refetch when dialog opens
         })),
       // eslint-disable-next-line react-hooks/exhaustive-deps
       [habitList.map((habit) => habit.id).join(","), open]
     ),
   });
 
+  // Create logsMap directly from logsQueries - React will handle updates automatically
   const logsMap = React.useMemo(() => {
     const map = new Map<string, HabitLogResponse[] | undefined>();
     habitList.forEach((habit, index) => {
-      map.set(habit.id, logsQueries[index]?.data);
+      const query = logsQueries[index];
+      map.set(habit.id, query?.data);
     });
     return map;
-  }, [habitList, logsQueries]);
+    // Depend on the actual data arrays, not just query objects
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    habitList.map((h) => h.id).join(","),
+    logsQueries
+      .map(
+        (q, i) =>
+          `${i}:${q.dataUpdatedAt ?? 0}:${JSON.stringify(
+            q.data?.map((l) => l.id) ?? []
+          )}`
+      )
+      .join("|"),
+  ]);
 
   const logsStatus = React.useMemo(() => {
     if (!open) return { isLoading: false, hasError: false };
@@ -130,18 +154,30 @@ export function BulkLogHabitsDialog() {
   const allUnloggedHabits = React.useMemo(() => {
     if (!habits || logsStatus.isLoading || logsStatus.hasError) return [];
 
+    // Get the current local date at midnight, then convert to UTC period
+    // This ensures we're checking against "today" in the user's timezone, not UTC
+    const now = new Date();
+    const localMidnight = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+    const currentDate = localMidnight;
+
     return habits.filter((habit) => {
-      if (!isHabitActiveThisPeriod(habit, referenceDate)) return false;
+      if (!isHabitActiveThisPeriod(habit, currentDate)) return false;
       const logs = logsMap.get(habit.id);
-      return !hasLogForPeriod(logs, habit.frequency, referenceDate);
+
+      // Use the hasLogForPeriod helper function to check if there's a log for the current period
+      const hasLogForCurrentPeriod = hasLogForPeriod(
+        logs,
+        habit.frequency,
+        currentDate
+      );
+
+      return !hasLogForCurrentPeriod;
     });
-  }, [
-    habits,
-    logsMap,
-    logsStatus.hasError,
-    logsStatus.isLoading,
-    referenceDate,
-  ]);
+  }, [habits, logsMap, logsStatus.hasError, logsStatus.isLoading]);
 
   const unloggedCounts = React.useMemo(() => {
     return allUnloggedHabits.reduce<Record<HabitFrequencyFilter, number>>(
@@ -210,6 +246,14 @@ export function BulkLogHabitsDialog() {
   const handleSubmit = async (values: BulkFormValues) => {
     if (!habits) return;
 
+    // Use local midnight to ensure we're logging for "today" in the user's timezone
+    const now = new Date();
+    const localMidnight = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate()
+    );
+
     const entries = allUnloggedHabits.flatMap((habit) => {
       const entry = values.entries?.[habit.id];
       const include =
@@ -217,7 +261,7 @@ export function BulkLogHabitsDialog() {
 
       if (!include) return [];
 
-      const periodStart = getPeriodStartUtc(referenceDate, habit.frequency);
+      const periodStart = getPeriodStartUtc(localMidnight, habit.frequency);
 
       return [
         {
@@ -250,9 +294,34 @@ export function BulkLogHabitsDialog() {
         return;
       }
 
+      // The mutation's onSuccess already invalidates and triggers refetch
+      // But we need to ensure the UI updates. Force refetch all affected queries.
+      const affectedHabitIds = new Set(entries.map((e) => e.habitId));
+
+      // Wait for all affected queries to refetch and update
+      await Promise.all(
+        Array.from(affectedHabitIds).map(async (habitId) => {
+          // Invalidate first to mark as stale
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.habitLogs(habitId),
+          });
+          // Then refetch to get fresh data
+          await queryClient.refetchQueries({
+            queryKey: queryKeys.habitLogs(habitId),
+            exact: false,
+          });
+        })
+      );
+
+      // Reset form
       form.reset({ entries: {}, expanded: {} });
-      setOpen(false);
-      setFrequency("daily");
+
+      // Don't close immediately - let React re-render with updated data first
+      // The user will see the list update and can close manually or we can auto-close after a brief delay
+      setTimeout(() => {
+        setOpen(false);
+        setFrequency("daily");
+      }, 300);
     } catch (error) {
       console.error("Bulk log failed", error);
       toast({
